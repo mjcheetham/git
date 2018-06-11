@@ -1067,6 +1067,7 @@ enum fsync_method {
 
 extern enum fsync_method fsync_method;
 extern int core_preload_index;
+extern int core_gvfs;
 extern int precomposed_unicode;
 extern int protect_hfs;
 extern int protect_ntfs;
@@ -1086,6 +1087,8 @@ int use_optional_locks(void);
  */
 extern char comment_line_char;
 extern int auto_comment_line_char;
+
+extern int core_virtualize_objects;
 
 enum log_refs_config {
 	LOG_REFS_UNSET = -1,
