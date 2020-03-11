@@ -156,7 +156,6 @@ static unsigned long empty_auth_useless =
 #endif
 
 static struct curl_slist *pragma_header;
-static struct curl_slist *no_pragma_header;
 static struct string_list extra_http_headers = STRING_LIST_INIT_DUP;
 
 static struct active_request_slot *active_queue_head;
@@ -271,6 +270,11 @@ size_t fwrite_wwwauth(char *ptr, size_t eltsize, size_t nmemb, void *buf_)
 size_t fwrite_null(char *ptr, size_t eltsize, size_t nmemb, void *strbuf)
 {
 	return nmemb;
+}
+
+static struct curl_slist *object_request_headers(void)
+{
+	return curl_slist_append(http_copy_default_headers(), "Pragma:");
 }
 
 static void closedown_active_slot(struct active_request_slot *slot)
@@ -1215,8 +1219,6 @@ void http_init(struct remote *remote, const char *url, int proactive_auth)
 
 	pragma_header = curl_slist_append(http_copy_default_headers(),
 		"Pragma: no-cache");
-	no_pragma_header = curl_slist_append(http_copy_default_headers(),
-		"Pragma:");
 
 #ifdef USE_CURL_MULTI
 	{
@@ -1311,9 +1313,6 @@ void http_cleanup(void)
 
 	curl_slist_free_all(pragma_header);
 	pragma_header = NULL;
-
-	curl_slist_free_all(no_pragma_header);
-	no_pragma_header = NULL;
 
 	if (curl_http_proxy) {
 		free((void *)curl_http_proxy);
@@ -2335,6 +2334,7 @@ void release_http_pack_request(struct http_pack_request *preq)
 	}
 	preq->slot = NULL;
 	strbuf_release(&preq->tmpfile);
+	curl_slist_free_all(preq->headers);
 	free(preq->url);
 	free(preq);
 }
@@ -2418,11 +2418,11 @@ struct http_pack_request *new_direct_http_pack_request(
 	}
 
 	preq->slot = get_active_slot();
+	preq->headers = object_request_headers();
 	curl_easy_setopt(preq->slot->curl, CURLOPT_FILE, preq->packfile);
 	curl_easy_setopt(preq->slot->curl, CURLOPT_WRITEFUNCTION, fwrite);
 	curl_easy_setopt(preq->slot->curl, CURLOPT_URL, preq->url);
-	curl_easy_setopt(preq->slot->curl, CURLOPT_HTTPHEADER,
-		no_pragma_header);
+	curl_easy_setopt(preq->slot->curl, CURLOPT_HTTPHEADER, preq->headers);
 
 	/*
 	 * If there is data present from a previous transfer attempt,
@@ -2588,13 +2588,14 @@ struct http_object_request *new_http_object_request(const char *base_url,
 	}
 
 	freq->slot = get_active_slot();
+	freq->headers = object_request_headers();
 
 	curl_easy_setopt(freq->slot->curl, CURLOPT_FILE, freq);
 	curl_easy_setopt(freq->slot->curl, CURLOPT_FAILONERROR, 0);
 	curl_easy_setopt(freq->slot->curl, CURLOPT_WRITEFUNCTION, fwrite_sha1_file);
 	curl_easy_setopt(freq->slot->curl, CURLOPT_ERRORBUFFER, freq->errorstr);
 	curl_easy_setopt(freq->slot->curl, CURLOPT_URL, freq->url);
-	curl_easy_setopt(freq->slot->curl, CURLOPT_HTTPHEADER, no_pragma_header);
+	curl_easy_setopt(freq->slot->curl, CURLOPT_HTTPHEADER, freq->headers);
 
 	/*
 	 * If we have successfully processed data from a previous fetch
@@ -2682,5 +2683,6 @@ void release_http_object_request(struct http_object_request *freq)
 		release_active_slot(freq->slot);
 		freq->slot = NULL;
 	}
+	curl_slist_free_all(freq->headers);
 	strbuf_release(&freq->tmpfile);
 }
