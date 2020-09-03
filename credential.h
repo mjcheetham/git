@@ -126,6 +126,7 @@ struct credential {
 	char *protocol;
 	char *host;
 	char *path;
+	char *normalized_url;
 };
 
 #define CREDENTIAL_INIT { STRING_LIST_INIT_DUP }

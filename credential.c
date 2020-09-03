@@ -21,6 +21,7 @@ void credential_clear(struct credential *c)
 	free(c->path);
 	free(c->username);
 	free(c->password);
+	free(c->normalized_url);
 	string_list_clear(&c->helpers, 0);
 
 	credential_init(c);
@@ -126,6 +127,10 @@ static void credential_apply_config(struct credential *c)
 
 	credential_format(c, &url);
 	normalized_url = url_normalize(url.buf, &config.url);
+
+	// Include the normalized URL for helpers that need more information about the
+	// request that needs authentication.
+	c->normalized_url = xstrdup(normalized_url);
 
 	git_config(urlmatch_config_entry, &config);
 	free(normalized_url);
@@ -267,6 +272,7 @@ void credential_write(const struct credential *c, FILE *fp)
 	credential_write_item(fp, "path", c->path, 0);
 	credential_write_item(fp, "username", c->username, 0);
 	credential_write_item(fp, "password", c->password, 0);
+	credential_write_item(fp, "normalized_url", c->normalized_url, 0);
 }
 
 static int run_credential_helper(struct credential *c,
