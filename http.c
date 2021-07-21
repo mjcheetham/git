@@ -214,6 +214,72 @@ size_t fwrite_buffer(char *ptr, size_t eltsize, size_t nmemb, void *buffer_)
 	return nmemb;
 }
 
+size_t fwrite_strmap(char *ptr, size_t eltsize, size_t nmemb, void *map_)
+{
+	size_t size = eltsize * nmemb;
+	struct strmap *map = map_;
+	char *line = NULL;
+	char *delim = NULL;
+	struct strbuf name = STRBUF_INIT;
+	struct strbuf value = STRBUF_INIT;
+	struct strmap_entry *existing = NULL;
+	void *prev_value;
+
+	/*
+	 * Header lines may not be null terminated so we create
+	 * our own copy that is.
+	 */
+	line = calloc(size + 1, sizeof(char));
+	memcpy(line, ptr, size);
+
+	delim = strchr(line, ':');
+
+	/*
+	 * If the given line is a HTTP status line and not a header name-value
+	 * then this signals a different HTTP response. libcurl writes all the
+	 * output of all response headers of all responses, including redirects.
+	 * We only care about the last HTTP request response's headers so clear
+	 * the existing map.
+	 */
+	if (!delim && !strncmp(line, "HTTP/", 5)) {
+		strmap_clear(map, 1);
+		return nmemb;
+	}
+
+	/*
+	 * Parse the header line in to name and value. Any duplicate entries in
+	 * the strmap are concatenated with a comma. As per RFC 2616 Section 4.2
+	 * concatenated header values are semantically equivalent to multiple
+	 * separate header lines.
+	 */
+	if (delim && delim < line + size) {
+		strbuf_add(&name, line, delim - line);
+
+		/* Trim leading white space and trailing CRLF in the value */
+		strbuf_add(&value, delim + 1, size - (delim + 1 - line));
+		strbuf_ltrim(&value);
+		strbuf_trim_trailing_newline(&value);
+
+		/* Normalize header name; header names are not case sensitive */
+		strbuf_tolower(&name);
+
+		/* Check strmap for existing entry and prepend existing value */
+		existing = strmap_get_entry(map, name.buf);
+		if (existing)
+			strbuf_insertf(&value, 0, "%s, ",
+					(char*)existing->value);
+
+		prev_value = strmap_put(map, name.buf, xstrdup(value.buf));
+		if (prev_value)
+			free(prev_value);
+	}
+
+	free(line);
+	strbuf_release(&name);
+	strbuf_release(&value);
+	return nmemb;
+}
+
 size_t fwrite_null(char *ptr, size_t eltsize, size_t nmemb, void *strbuf)
 {
 	return nmemb;
@@ -1630,8 +1696,24 @@ void normalize_curl_result(CURLcode *result, long http_code,
 
 static int handle_curl_result(struct slot_results *results)
 {
+	char *http_code;
+	const char *www_auth;
+
 	normalize_curl_result(&results->curl_result, results->http_code,
 			      curl_errorstr, sizeof(curl_errorstr));
+
+	/*
+	 * Add some useful information about the result as extra
+	 * properties for any credential helpers.
+	 */
+	http_code = xstrfmt("%ld", results->http_code);
+	credential_set_prop(&http_auth, "http.code", http_code);
+	free(http_code);
+
+	www_auth = strmap_get(results->response_headers, "www-authenticate");
+	if (www_auth)
+		credential_set_prop(&http_auth, "http.wwwauth",
+					www_auth);
 
 	if (results->curl_result == CURLE_OK) {
 		credential_approve(&http_auth);
@@ -1919,9 +2001,12 @@ static int http_request(const char *url,
 	struct active_request_slot *slot;
 	struct slot_results results;
 	struct curl_slist *headers = http_copy_default_headers();
+	struct strmap response_headers = STRMAP_INIT;
 	struct strbuf buf = STRBUF_INIT;
 	const char *accept_language;
 	int ret;
+
+	results.response_headers = &response_headers;
 
 	slot = get_active_slot();
 	curl_easy_setopt(slot->curl, CURLOPT_HTTPGET, 1);
@@ -1942,6 +2027,9 @@ static int http_request(const char *url,
 			curl_easy_setopt(slot->curl, CURLOPT_WRITEFUNCTION,
 					 fwrite_buffer);
 	}
+
+	curl_easy_setopt(slot->curl, CURLOPT_HEADERFUNCTION, fwrite_strmap);
+	curl_easy_setopt(slot->curl, CURLOPT_WRITEHEADER, &response_headers);
 
 	accept_language = get_accept_language();
 
@@ -1986,6 +2074,7 @@ static int http_request(const char *url,
 
 	curl_slist_free_all(headers);
 	strbuf_release(&buf);
+	strmap_clear(&response_headers, 1);
 
 	return ret;
 }
@@ -2042,8 +2131,7 @@ static int update_url_from_redirect(struct strbuf *base,
 	return 1;
 }
 
-static int http_request_reauth(const char *url,
-			       void *result, int target,
+static int http_request_reauth(const char *url, void *result, int target,
 			       struct http_get_options *options)
 {
 	int ret = http_request(url, result, target, options);

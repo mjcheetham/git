@@ -59,6 +59,7 @@ struct slot_results {
 	long http_code;
 	long auth_avail;
 	long http_connectcode;
+	struct strmap *response_headers;
 };
 
 struct active_request_slot {
