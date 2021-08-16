@@ -16,6 +16,7 @@
 #include "protocol.h"
 #include "string-list.h"
 #include "object-store.h"
+#include "strbuf.h"
 
 static struct trace_key trace_curl = TRACE_KEY_INIT(CURL);
 static int trace_curl_data = 1;
@@ -179,6 +180,25 @@ size_t fwrite_buffer(char *ptr, size_t eltsize, size_t nmemb, void *buffer_)
 
 	strbuf_add(buffer, ptr, size);
 	return nmemb;
+}
+
+static size_t fwrite_headers(char *ptr, size_t eltsize, size_t nmemb, void *p)
+{
+	size_t size = eltsize * nmemb;
+
+	/*
+	 * If ptr is a HTTP status line and not a header field then this signals
+	 * a different HTTP response. libcurl writes all the output of all
+	 * response headers of all responses, including redirects.
+	 * We only care about the last HTTP request response's headers so clear
+	 * the existing buffer.
+	 */
+	if (!strncmp(ptr, "HTTP/", 5))
+		strbuf_release(&http_auth.headers);
+	else
+		strbuf_add(&http_auth.headers, ptr, size);
+
+	return size;
 }
 
 size_t fwrite_null(char *ptr, size_t eltsize, size_t nmemb, void *strbuf)
@@ -1784,6 +1804,8 @@ static int http_request(const char *url,
 			curl_easy_setopt(slot->curl, CURLOPT_WRITEFUNCTION,
 					 fwrite_buffer);
 	}
+
+	curl_easy_setopt(slot->curl, CURLOPT_HEADERFUNCTION, fwrite_headers);
 
 	accept_language = get_accept_language();
 

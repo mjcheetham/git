@@ -2,6 +2,7 @@
 #define CREDENTIAL_H
 
 #include "string-list.h"
+#include "strbuf.h"
 #include "strmap.h"
 
 /**
@@ -124,6 +125,14 @@ struct credential {
 	 */
 	struct strmap extra_props;
 
+	/**
+	 * A `strbuf` of header values in an network response, in the order
+	 * they were received in the response. The contents of the strbuf
+	 * are raw values and must be encoded or escaped before use over the
+	 * credential helper wire format.
+	 */
+	struct strbuf headers;
+
 	unsigned approved:1,
 		 configured:1,
 		 quit:1,
@@ -140,6 +149,7 @@ struct credential {
 #define CREDENTIAL_INIT { \
 	.helpers = STRING_LIST_INIT_DUP, \
 	.extra_props = STRMAP_INIT, \
+	.headers = STRBUF_INIT, \
 }
 
 /* Initialize a credential structure, setting all fields to empty. */

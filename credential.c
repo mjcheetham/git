@@ -8,6 +8,7 @@
 #include "sigchain.h"
 #include "urlmatch.h"
 #include "strmap.h"
+#include "strbuf.h"
 
 void credential_init(struct credential *c)
 {
@@ -24,6 +25,7 @@ void credential_clear(struct credential *c)
 	free(c->password);
 	string_list_clear(&c->helpers, 0);
 	strmap_clear(&c->extra_props, 0);
+	strbuf_release(&c->headers);
 
 	credential_init(c);
 }
