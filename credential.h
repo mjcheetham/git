@@ -2,6 +2,7 @@
 #define CREDENTIAL_H
 
 #include "string-list.h"
+#include "strmap.h"
 
 /**
  * The credentials API provides an abstracted way of gathering username and
@@ -115,6 +116,14 @@ struct credential {
 	 */
 	struct string_list helpers;
 
+	/**
+	 * A `strmap` of extra credential properties. Each entry is a
+	 * key-value pair of strings that can be used by Git transport
+	 * helpers and credential helpers alike to pass information between
+	 * each other.
+	 */
+	struct strmap extra_props;
+
 	unsigned approved:1,
 		 configured:1,
 		 quit:1,
@@ -130,6 +139,7 @@ struct credential {
 
 #define CREDENTIAL_INIT { \
 	.helpers = STRING_LIST_INIT_DUP, \
+	.extra_props = STRMAP_INIT, \
 }
 
 /* Initialize a credential structure, setting all fields to empty. */
@@ -190,6 +200,8 @@ void credential_write(const struct credential *, FILE *);
  */
 void credential_from_url(struct credential *, const char *url);
 int credential_from_url_gently(struct credential *, const char *url, int quiet);
+
+void credential_set_prop(struct credential *, const char *key, const char *val);
 
 int credential_match(const struct credential *want,
 		     const struct credential *have);
