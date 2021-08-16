@@ -214,6 +214,60 @@ size_t fwrite_buffer(char *ptr, size_t eltsize, size_t nmemb, void *buffer_)
 	return nmemb;
 }
 
+size_t fwrite_wwwauth(char *ptr, size_t eltsize, size_t nmemb, void *buf_)
+{
+	size_t size = eltsize * nmemb;
+	struct strbuf *buf = buf_;
+	char *line = NULL;
+	char *delim = NULL;
+	struct strbuf value = STRBUF_INIT;
+
+	/*
+	 * Header lines may not be null terminated so we create
+	 * our own copy that is.
+	 */
+	line = calloc(size + 1, sizeof(char));
+	memcpy(line, ptr, size);
+
+	delim = strchr(line, ':');
+
+	/*
+	 * If the given line is a HTTP status line and not a header name-value
+	 * then this signals a different HTTP response. libcurl writes all the
+	 * output of all response headers of all responses, including redirects.
+	 * We only care about the last HTTP request response's headers so clear
+	 * the existing buffer.
+	 */
+	if (!delim && !strncmp(line, "HTTP/", 5)) {
+		strbuf_setlen(buf, 0);
+		return nmemb;
+	}
+
+	/*
+	 * Parse the header line in to name and value. Any duplicate entries in
+	 * are concatenated with a comma. As per RFC 2616 Section 4.2
+	 * concatenated header values are semantically equivalent to multiple
+	 * separate header lines.
+	 */
+	if (delim && delim < line + size &&
+	    !strncasecmp(line, "www-authenticate", 16)) {
+		/* Trim leading white space and trailing CRLF in the value */
+		strbuf_add(&value, delim + 1, size - (delim + 1 - line));
+		strbuf_ltrim(&value);
+		strbuf_trim_trailing_newline(&value);
+
+		/* Check buffer for existing entry and append the new value */
+		if (buf->len)
+			strbuf_addstr(buf, ", ");
+
+		strbuf_addbuf(buf, &value);
+	}
+
+	free(line);
+	strbuf_release(&value);
+	return nmemb;
+}
+
 size_t fwrite_null(char *ptr, size_t eltsize, size_t nmemb, void *strbuf)
 {
 	return nmemb;
@@ -1919,9 +1973,12 @@ static int http_request(const char *url,
 	struct active_request_slot *slot;
 	struct slot_results results;
 	struct curl_slist *headers = http_copy_default_headers();
+	struct strbuf wwwauth_header = STRBUF_INIT;
 	struct strbuf buf = STRBUF_INIT;
 	const char *accept_language;
 	int ret;
+
+	results.wwwauth_header = &wwwauth_header;
 
 	slot = get_active_slot();
 	curl_easy_setopt(slot->curl, CURLOPT_HTTPGET, 1);
@@ -1942,6 +1999,9 @@ static int http_request(const char *url,
 			curl_easy_setopt(slot->curl, CURLOPT_WRITEFUNCTION,
 					 fwrite_buffer);
 	}
+
+	curl_easy_setopt(slot->curl, CURLOPT_HEADERFUNCTION, fwrite_wwwauth);
+	curl_easy_setopt(slot->curl, CURLOPT_WRITEHEADER, &wwwauth_header);
 
 	accept_language = get_accept_language();
 
@@ -1986,6 +2046,7 @@ static int http_request(const char *url,
 
 	curl_slist_free_all(headers);
 	strbuf_release(&buf);
+	strbuf_release(&wwwauth_header);
 
 	return ret;
 }
