@@ -280,6 +280,51 @@ static void credential_write_item(FILE *fp, const char *key, const char *value,
 	fprintf(fp, "%s=%s\n", key, value);
 }
 
+static void credential_write_buf_escaped(FILE *fp, const char* name,
+					 const struct strbuf *buf)
+{
+	int i;
+	struct strbuf escaped = STRBUF_INIT;
+
+	if (!buf || !buf->len)
+		return;
+
+	/*
+	 * These characters must be encoded or escaped as they have special
+	 * meaning in the credential helper wire-format.
+	 *
+	 *   Character       |  Raw  |  Encoded
+	 * --------------------------------------
+	 *   Backslash       |  '\'  |  "\\"
+	 *   NUL byte        |  '\0' |  "\\0"
+	 *   Line feed       |  '\n' |  "\\n"
+	 *   Carriage return |  '\r' |  "\\r"
+	 */
+
+	for (i = 0; i < buf->len; i++) {
+		unsigned char ch = buf->buf[i];
+		switch (ch) {
+		case '\\':
+			strbuf_addstr(&escaped, "\\");
+			break;
+		case '\0':
+			strbuf_addstr(&escaped, "\\0");
+			break;
+		case '\n':
+			strbuf_addstr(&escaped, "\\n");
+			break;
+		case '\r':
+			strbuf_addstr(&escaped, "\\r");
+			break;
+		default:
+			strbuf_addch(&escaped, ch);
+		}
+	}
+
+	credential_write_item(fp, name, escaped.buf, 0);
+	strbuf_release(&escaped);
+}
+
 void credential_write(const struct credential *c, FILE *fp)
 {
 	struct strmap *props = (struct strmap *)&c->extra_props;
@@ -291,6 +336,7 @@ void credential_write(const struct credential *c, FILE *fp)
 	credential_write_item(fp, "path", c->path, 0);
 	credential_write_item(fp, "username", c->username, 0);
 	credential_write_item(fp, "password", c->password, 0);
+	credential_write_buf_escaped(fp, "headers", &c->headers);
 	strmap_for_each_entry(props, &props_iter, prop)
 		fprintf(fp, "%s=%s\n", prop->key, (char*)prop->value);
 }
