@@ -1687,6 +1687,14 @@ static int handle_curl_result(struct slot_results *results)
 	normalize_curl_result(&results->curl_result, results->http_code,
 			      curl_errorstr, sizeof(curl_errorstr));
 
+	/*
+	 * Add some useful information about the result as extra
+	 * properties for any credential helpers.
+	 */
+	if (results->wwwauth_header->len)
+		credential_set_prop(&http_auth, "http.wwwauth",
+				    results->wwwauth_header->buf);
+
 	if (results->curl_result == CURLE_OK) {
 		credential_approve(&http_auth);
 		credential_approve(&proxy_auth);
