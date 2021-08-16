@@ -7,6 +7,7 @@
 #include "prompt.h"
 #include "sigchain.h"
 #include "urlmatch.h"
+#include "strmap.h"
 
 void credential_init(struct credential *c)
 {
@@ -23,6 +24,7 @@ void credential_clear(struct credential *c)
 	free(c->password);
 	string_list_clear(&c->helpers, 0);
 	strvec_clear(&c->wwwauth_headers);
+	strmap_clear(&c->extra_props, 0);
 
 	credential_init(c);
 }
@@ -38,6 +40,18 @@ int credential_match(const struct credential *want,
 #undef CHECK
 }
 
+void credential_set_prop(struct credential *c, const char *key, const char *val)
+{
+	void *old_val;
+
+	if (!val) {
+		strmap_remove(&c->extra_props, key, 1);
+		return;
+	}
+
+	old_val = strmap_put(&c->extra_props, key, (void*)xstrdup(val));
+	free(old_val);
+}
 
 static int credential_from_potentially_partial_url(struct credential *c,
 						   const char *url);
@@ -239,12 +253,13 @@ int credential_read(struct credential *c, FILE *fp)
 			credential_from_url(c, value);
 		} else if (!strcmp(key, "quit")) {
 			c->quit = !!git_config_bool("quit", value);
-		}
-		/*
-		 * Ignore other lines; we don't know what they mean, but
-		 * this future-proofs us when later versions of git do
-		 * learn new lines, and the helpers are updated to match.
-		 */
+		} else
+			/*
+			 * Capture other lines; we don't know what they mean.
+			 * We should preserve them and echo them back to the
+			 * helpers.
+			 */
+			credential_set_prop(c, key, xstrdup(value));
 	}
 
 	strbuf_release(&line);
@@ -276,12 +291,18 @@ static void credential_write_strvec(FILE *fp, const char *key,
 
 void credential_write(const struct credential *c, FILE *fp)
 {
+	struct strmap *props = (struct strmap *)&c->extra_props;
+	struct hashmap_iter props_iter;
+	struct strmap_entry *prop = NULL;
+
 	credential_write_item(fp, "protocol", c->protocol, 1);
 	credential_write_item(fp, "host", c->host, 1);
 	credential_write_item(fp, "path", c->path, 0);
 	credential_write_item(fp, "username", c->username, 0);
 	credential_write_item(fp, "password", c->password, 0);
 	credential_write_strvec(fp, "wwwauth", &c->wwwauth_headers);
+	strmap_for_each_entry(props, &props_iter, prop)
+		fprintf(fp, "%s=%s\n", prop->key, (char*)prop->value);
 }
 
 static int run_credential_helper(struct credential *c,

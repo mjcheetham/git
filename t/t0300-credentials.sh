@@ -128,6 +128,31 @@ test_expect_success 'credential_fill passes along metadata' '
 	EOF
 '
 
+test_expect_success 'credential_fill echos additional props' '
+	check fill "verbatim one two" <<-\EOF
+	protocol=ftp
+	host=example.com
+	path=foo.git
+	foo=bar
+	baz=42
+	--
+	protocol=ftp
+	host=example.com
+	path=foo.git
+	username=one
+	password=two
+	foo=bar
+	baz=42
+	--
+	verbatim: get
+	verbatim: protocol=ftp
+	verbatim: host=example.com
+	verbatim: path=foo.git
+	verbatim: foo=bar
+	verbatim: baz=42
+	EOF
+'
+
 test_expect_success 'credential_approve calls all helpers' '
 	check approve useless "verbatim one two" <<-\EOF
 	protocol=http
