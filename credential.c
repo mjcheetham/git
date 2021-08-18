@@ -22,6 +22,7 @@ void credential_clear(struct credential *c)
 	free(c->path);
 	free(c->username);
 	free(c->password);
+	free(c->authscheme);
 	string_list_clear(&c->helpers, 0);
 	strmap_clear(&c->extra_props, 0);
 
@@ -246,6 +247,12 @@ int credential_read(struct credential *c, FILE *fp)
 		} else if (!strcmp(key, "path")) {
 			free(c->path);
 			c->path = xstrdup(value);
+		} else if (!strcmp(key, "authscheme")) {
+			free(c->authscheme);
+			c->authscheme = xstrdup(value);
+		} else if (!strcmp(key, "avail_auth")) {
+			free(c->avail_auth);
+			c->avail_auth = xstrdup(value);
 		} else if (!strcmp(key, "url")) {
 			credential_from_url(c, value);
 		} else if (!strcmp(key, "quit")) {
@@ -286,6 +293,8 @@ void credential_write(const struct credential *c, FILE *fp)
 	credential_write_item(fp, "path", c->path, 0);
 	credential_write_item(fp, "username", c->username, 0);
 	credential_write_item(fp, "password", c->password, 0);
+	credential_write_item(fp, "authscheme", c->authscheme, 0);
+	credential_write_item(fp, "avail_auth", c->avail_auth, 0);
 	strmap_for_each_entry(props, &props_iter, prop)
 		fprintf(fp, "%s=%s\n", prop->key, (char*)prop->value);
 }
@@ -348,6 +357,15 @@ static int credential_do(struct credential *c, const char *helper,
 
 	strbuf_release(&cmd);
 	return r;
+}
+
+void credential_fill_availauth(struct credential *c,
+			       struct string_list *avail_auth) {
+	struct strbuf buf = STRBUF_INIT;
+	strbuf_add_separated_string_list(&buf, ",", avail_auth);
+	c->avail_auth = xstrdup(buf.buf);
+	credential_fill(c);
+	strbuf_release(&buf);
 }
 
 void credential_fill(struct credential *c)

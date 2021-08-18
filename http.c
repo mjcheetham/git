@@ -543,6 +543,9 @@ static int curl_empty_auth_enabled(void)
 
 static void init_curl_http_auth(CURL *result)
 {
+	char *auth_header = NULL;
+	struct curl_slist *headers = NULL;
+
 	if (!http_auth.username || !*http_auth.username) {
 		if (curl_empty_auth_enabled())
 			curl_easy_setopt(result, CURLOPT_USERPWD, ":");
@@ -551,9 +554,25 @@ static void init_curl_http_auth(CURL *result)
 
 	credential_fill(&http_auth);
 
+	/*
+	 * TODO: the remainder of this code should probably get shifted
+	 * and called closer to when the request is run, so that we can
+	 * set the correct headers or curl options.
+	 */
+
+	/* If we've been given a specific auth scheme to use, use it! */
+	if (http_auth.authscheme && http_auth.password) {
+		auth_header = xstrfmt("Authorization: %s %s",
+				      http_auth.authscheme, http_auth.password);
+		curl_slist_append(headers, auth_header);
+		curl_easy_setopt(result, CURLOPT_HTTPHEADER, headers);
+		free(auth_header);
+		return;
+	}
+
 #if LIBCURL_VERSION_NUM >= 0x071301
-	curl_easy_setopt(result, CURLOPT_USERNAME, http_auth.username);
-	curl_easy_setopt(result, CURLOPT_PASSWORD, http_auth.password);
+		curl_easy_setopt(result, CURLOPT_USERNAME, http_auth.username);
+		curl_easy_setopt(result, CURLOPT_PASSWORD, http_auth.password);
 #else
 	{
 		static struct strbuf up = STRBUF_INIT;
@@ -969,6 +988,9 @@ static CURL *get_curl_handle(void)
 #endif
 	}
 
+	/* TODO: consider if this should be changed to a proactive fill and not
+	 * actually also set header values or options.
+	 */
 	if (http_proactive_auth)
 		init_curl_http_auth(result);
 
@@ -1399,6 +1421,7 @@ struct active_request_slot *get_active_slot(void)
 	curl_easy_setopt(slot->curl, CURLOPT_COOKIEFILE, curl_cookie_file);
 	if (curl_save_cookies)
 		curl_easy_setopt(slot->curl, CURLOPT_COOKIEJAR, curl_cookie_file);
+	/* TODO: replace pragma_header here with some list pointer we carry */
 	curl_easy_setopt(slot->curl, CURLOPT_HTTPHEADER, pragma_header);
 	curl_easy_setopt(slot->curl, CURLOPT_ERRORBUFFER, curl_errorstr);
 	curl_easy_setopt(slot->curl, CURLOPT_CUSTOMREQUEST, NULL);
@@ -1426,6 +1449,8 @@ struct active_request_slot *get_active_slot(void)
 #ifdef LIBCURL_CAN_HANDLE_AUTH_ANY
 	curl_easy_setopt(slot->curl, CURLOPT_HTTPAUTH, http_auth_methods);
 #endif
+
+	/* TODO: understand what this is doing and why */
 	if (http_auth.password || curl_empty_auth_enabled())
 		init_curl_http_auth(slot->curl);
 
@@ -1683,8 +1708,6 @@ void normalize_curl_result(CURLcode *result, long http_code,
 
 static int handle_curl_result(struct slot_results *results)
 {
-	const char *www_auth;
-
 	normalize_curl_result(&results->curl_result, results->http_code,
 			      curl_errorstr, sizeof(curl_errorstr));
 
@@ -2116,6 +2139,8 @@ static int http_request_reauth(const char *url,
 			       void *result, int target,
 			       struct http_get_options *options)
 {
+	struct string_list auth_list = STRING_LIST_INIT_NODUP;
+
 	int ret = http_request(url, result, target, options);
 
 	if (ret != HTTP_OK && ret != HTTP_REAUTH)
@@ -2155,7 +2180,19 @@ static int http_request_reauth(const char *url,
 		BUG("Unknown http_request target");
 	}
 
-	credential_fill(&http_auth);
+	if (http_auth_methods & CURLAUTH_BASIC)
+		string_list_append(&auth_list, "Basic");
+	if (http_auth_methods & CURLAUTH_DIGEST)
+		string_list_append(&auth_list, "Digest");
+	if (http_auth_methods & CURLAUTH_BEARER)
+		string_list_append(&auth_list, "Bearer");
+	if (http_auth_methods & CURLAUTH_NEGOTIATE)
+		string_list_append(&auth_list, "Negotiate");
+	if (http_auth_methods & CURLAUTH_NTLM)
+		string_list_append(&auth_list, "NTLM");
+
+	credential_fill_availauth(&http_auth, &auth_list);
+	string_list_clear(&auth_list, 0);
 
 	return http_request(url, result, target, options);
 }

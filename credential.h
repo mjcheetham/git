@@ -135,6 +135,19 @@ struct credential {
 	char *protocol;
 	char *host;
 	char *path;
+
+	/**
+	 * Comma separated list of available authentication schemes as
+	 * advertised by the remote.
+	 */
+	char *avail_auth;
+
+	/**
+	 * The authorization scheme to use.  If this is NULL, the password field
+	 * is used as a password for whatever scheme libcurl is configured to
+	 * negotiate.
+	 */
+	char *authscheme;
 };
 
 #define CREDENTIAL_INIT { \
