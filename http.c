@@ -437,8 +437,13 @@ static void init_curl_http_auth(CURL *result)
 
 	credential_fill(&http_auth);
 
-	curl_easy_setopt(result, CURLOPT_USERNAME, http_auth.username);
-	curl_easy_setopt(result, CURLOPT_PASSWORD, http_auth.password);
+	if (strcasecmp("bearer", http_auth.credtype))
+		curl_easy_setopt(result, CURLOPT_XOAUTH2_BEARER,
+			http_auth.password);
+	else {
+		curl_easy_setopt(result, CURLOPT_USERNAME, http_auth.username);
+		curl_easy_setopt(result, CURLOPT_PASSWORD, http_auth.password);
+ 	}
 }
 
 /* *var must be free-able */
