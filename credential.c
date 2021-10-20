@@ -22,6 +22,7 @@ void credential_clear(struct credential *c)
 	free(c->path);
 	free(c->username);
 	free(c->password);
+	free(c->credtype);
 	string_list_clear(&c->helpers, 0);
 	strmap_clear(&c->extra_props, 0);
 
@@ -247,6 +248,9 @@ int credential_read(struct credential *c, FILE *fp)
 		} else if (!strcmp(key, "path")) {
 			free(c->path);
 			c->path = xstrdup(value);
+		} else if (!strcmp(key, "credtype")) {
+			free(c->credtype);
+			c->credtype = xstrdup(value);
 		} else if (!strcmp(key, "url")) {
 			credential_from_url(c, value);
 		} else if (!strcmp(key, "quit")) {
@@ -287,6 +291,7 @@ void credential_write(const struct credential *c, FILE *fp)
 	credential_write_item(fp, "path", c->path, 0);
 	credential_write_item(fp, "username", c->username, 0);
 	credential_write_item(fp, "password", c->password, 0);
+	credential_write_item(fp, "credtype", c->credtype, 0);
 	strmap_for_each_entry(props, &props_iter, prop)
 		fprintf(fp, "%s=%s\n", prop->key, (char*)prop->value);
 }

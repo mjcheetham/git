@@ -135,6 +135,7 @@ struct credential {
 	char *protocol;
 	char *host;
 	char *path;
+	char *credtype;
 };
 
 #define CREDENTIAL_INIT { \
