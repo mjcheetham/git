@@ -558,6 +558,36 @@ test_expect_success 'http auth forgets bogus credentials' '
 	expect_askpass both user@host
 '
 
+test_expect_success 'set up credential helper' '
+	write_script git-credential-tee <<-\EOF
+	cmd=$1
+	if [ -f git-credential-tee-$cmd ]; then
+		rm git-credential-tee-$cmd
+	fi
+	while read line;
+	do
+		if [ -z "$line" ]; then
+			exit 0
+		fi
+		echo "$line" >> git-credential-tee-$cmd
+	done
+	EOF
+'
+
+test_expect_success 'http auth gives response headers to credential helper' '
+	PROTO_HOST="protocol=http\nhost=127\.0\.0\.1:5551\n" &&
+	USER_PASS="username=user@host\npassword=pass@host\n" &&
+	HEADER="headers=.+\n" &&
+
+	test_config credential.helper "/Users/mjcheetham/repos/mjcheetham/git/t/trash\ directory.t5551-http-fetch-smart/git-credential-tee" &&
+
+	set_askpass user@host pass@host &&
+	git ls-remote "$HTTPD_URL/auth/smart/repo.git" >/dev/null &&
+	expect_askpass both user@host #&&
+	#grep -i "^$PROTO_HOST$HEADER" git-credential-tee-get #&&
+	#grep -i "^$PROTO_HOST$USER_PASS$HEADER" git-credential-tee-store
+'
+
 test_expect_success 'client falls back from v2 to v0 to match server' '
 	GIT_TRACE_PACKET=$PWD/trace \
 	GIT_TEST_PROTOCOL_VERSION=2 \
