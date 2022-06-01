@@ -449,8 +449,21 @@ static void init_curl_http_auth(struct active_request_slot *slot)
 
 	credential_fill(&http_auth);
 
-	curl_easy_setopt(slot->curl, CURLOPT_USERNAME, http_auth.username);
-	curl_easy_setopt(slot->curl, CURLOPT_PASSWORD, http_auth.password);
+	if (!http_auth.type || !strcasecmp(http_auth.type, "basic")) {
+		curl_easy_setopt(slot->curl, CURLOPT_USERNAME,
+			http_auth.username);
+		curl_easy_setopt(slot->curl, CURLOPT_PASSWORD,
+			http_auth.password);
+	} else if (!strcasecmp(http_auth.type, "bearer")) {
+		curl_easy_setopt(slot->curl, CURLOPT_HTTPAUTH, CURLAUTH_BEARER);
+		curl_easy_setopt(slot->curl, CURLOPT_XOAUTH2_BEARER,
+			http_auth.password);
+	} else {
+		char *header = xstrfmt("Authorization: %s %s", http_auth.type,
+			http_auth.password);
+		curl_slist_append(slot->headers, header);
+		free(header);
+	}
 }
 
 /* *var must be free-able */
