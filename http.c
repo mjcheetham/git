@@ -124,8 +124,6 @@ static unsigned long empty_auth_useless =
 	| CURLAUTH_DIGEST_IE
 	| CURLAUTH_DIGEST;
 
-static struct curl_slist *pragma_header;
-static struct curl_slist *no_pragma_header;
 static struct string_list extra_http_headers = STRING_LIST_INIT_DUP;
 
 static struct curl_slist *host_resolutions;
@@ -1057,11 +1055,6 @@ void http_init(struct remote *remote, const char *url, int proactive_auth)
 	if (remote)
 		var_override(&http_proxy_authmethod, remote->http_proxy_authmethod);
 
-	pragma_header = curl_slist_append(http_copy_default_headers(),
-		"Pragma: no-cache");
-	no_pragma_header = curl_slist_append(http_copy_default_headers(),
-		"Pragma:");
-
 	{
 		char *http_max_requests = getenv("GIT_HTTP_MAX_REQUESTS");
 		if (http_max_requests)
@@ -1125,6 +1118,7 @@ void http_cleanup(void)
 		struct active_request_slot *next = slot->next;
 		if (slot->curl) {
 			xmulti_remove_handle(slot);
+			curl_slist_free_all(slot->headers);
 			curl_easy_cleanup(slot->curl);
 		}
 		free(slot);
@@ -1138,12 +1132,6 @@ void http_cleanup(void)
 	curl_global_cleanup();
 
 	string_list_clear(&extra_http_headers, 0);
-
-	curl_slist_free_all(pragma_header);
-	pragma_header = NULL;
-
-	curl_slist_free_all(no_pragma_header);
-	no_pragma_header = NULL;
 
 	curl_slist_free_all(host_resolutions);
 	host_resolutions = NULL;
@@ -1179,7 +1167,18 @@ void http_cleanup(void)
 	FREE_AND_NULL(cached_accept_language);
 }
 
-struct active_request_slot *get_active_slot(void)
+static struct curl_slist *http_copy_default_headers(void)
+{
+	struct curl_slist *headers = NULL;
+	const struct string_list_item *item;
+
+	for_each_string_list_item(item, &extra_http_headers)
+		headers = curl_slist_append(headers, item->string);
+
+	return headers;
+}
+
+struct active_request_slot *get_active_slot(int no_pragma_header)
 {
 	struct active_request_slot *slot = active_queue_head;
 	struct active_request_slot *newslot;
@@ -1201,6 +1200,7 @@ struct active_request_slot *get_active_slot(void)
 		newslot->curl = NULL;
 		newslot->in_use = 0;
 		newslot->next = NULL;
+		newslot->headers = NULL;
 
 		slot = active_queue_head;
 		if (!slot) {
@@ -1218,6 +1218,17 @@ struct active_request_slot *get_active_slot(void)
 		curl_session_count++;
 	}
 
+	if (slot->headers) {
+		curl_slist_free_all(slot->headers);
+		slot->headers = NULL;
+	}
+
+	slot->headers = http_copy_default_headers();
+
+	if (!no_pragma_header)
+		slot->headers = curl_slist_append(slot->headers,
+			"Pragma: no-cache");
+
 	active_requests++;
 	slot->in_use = 1;
 	slot->results = NULL;
@@ -1227,7 +1238,6 @@ struct active_request_slot *get_active_slot(void)
 	curl_easy_setopt(slot->curl, CURLOPT_COOKIEFILE, curl_cookie_file);
 	if (curl_save_cookies)
 		curl_easy_setopt(slot->curl, CURLOPT_COOKIEJAR, curl_cookie_file);
-	curl_easy_setopt(slot->curl, CURLOPT_HTTPHEADER, pragma_header);
 	curl_easy_setopt(slot->curl, CURLOPT_RESOLVE, host_resolutions);
 	curl_easy_setopt(slot->curl, CURLOPT_ERRORBUFFER, curl_errorstr);
 	curl_easy_setopt(slot->curl, CURLOPT_CUSTOMREQUEST, NULL);
@@ -1259,6 +1269,8 @@ struct active_request_slot *get_active_slot(void)
 
 int start_active_slot(struct active_request_slot *slot)
 {
+	curl_easy_setopt(slot->curl, CURLOPT_HTTPHEADER, slot->headers);
+
 	CURLMcode curlm_result = curl_multi_add_handle(curlm, slot->curl);
 	int num_transfers;
 
@@ -1316,6 +1328,7 @@ void fill_active_slots(void)
 	while (slot != NULL) {
 		if (!slot->in_use && slot->curl != NULL
 			&& curl_session_count > min_curl_sessions) {
+			curl_slist_free_all(slot->headers);
 			curl_easy_cleanup(slot->curl);
 			slot->curl = NULL;
 			curl_session_count--;
@@ -1393,6 +1406,7 @@ static void release_active_slot(struct active_request_slot *slot)
 	if (slot->curl) {
 		xmulti_remove_handle(slot);
 		if (curl_session_count > min_curl_sessions) {
+			curl_slist_free_all(slot->headers);
 			curl_easy_cleanup(slot->curl);
 			slot->curl = NULL;
 			curl_session_count--;
@@ -1548,17 +1562,6 @@ int run_one_slot(struct active_request_slot *slot,
 
 	run_active_slot(slot);
 	return handle_curl_result(results);
-}
-
-struct curl_slist *http_copy_default_headers(void)
-{
-	struct curl_slist *headers = NULL;
-	const struct string_list_item *item;
-
-	for_each_string_list_item(item, &extra_http_headers)
-		headers = curl_slist_append(headers, item->string);
-
-	return headers;
 }
 
 static CURLcode curlinfo_strbuf(CURL *curl, CURLINFO info, struct strbuf *buf)
@@ -1778,12 +1781,11 @@ static int http_request(const char *url,
 {
 	struct active_request_slot *slot;
 	struct slot_results results;
-	struct curl_slist *headers = http_copy_default_headers();
-	struct strbuf buf = STRBUF_INIT;
 	const char *accept_language;
+	int no_cache = options && options->no_cache;
 	int ret;
 
-	slot = get_active_slot();
+	slot = get_active_slot(!no_cache);
 	curl_easy_setopt(slot->curl, CURLOPT_HTTPGET, 1);
 
 	if (!result) {
@@ -1806,27 +1808,23 @@ static int http_request(const char *url,
 	accept_language = get_accept_language();
 
 	if (accept_language)
-		headers = curl_slist_append(headers, accept_language);
+		slot->headers = curl_slist_append(slot->headers,
+			accept_language);
 
-	strbuf_addstr(&buf, "Pragma:");
-	if (options && options->no_cache)
-		strbuf_addstr(&buf, " no-cache");
 	if (options && options->initial_request &&
 	    http_follow_config == HTTP_FOLLOW_INITIAL)
 		curl_easy_setopt(slot->curl, CURLOPT_FOLLOWLOCATION, 1);
-
-	headers = curl_slist_append(headers, buf.buf);
 
 	/* Add additional headers here */
 	if (options && options->extra_headers) {
 		const struct string_list_item *item;
 		for_each_string_list_item(item, options->extra_headers) {
-			headers = curl_slist_append(headers, item->string);
+			slot->headers = curl_slist_append(slot->headers,
+				item->string);
 		}
 	}
 
 	curl_easy_setopt(slot->curl, CURLOPT_URL, url);
-	curl_easy_setopt(slot->curl, CURLOPT_HTTPHEADER, headers);
 	curl_easy_setopt(slot->curl, CURLOPT_ENCODING, "");
 	curl_easy_setopt(slot->curl, CURLOPT_FAILONERROR, 0);
 
@@ -1843,9 +1841,6 @@ static int http_request(const char *url,
 	if (options && options->effective_url)
 		curlinfo_strbuf(slot->curl, CURLINFO_EFFECTIVE_URL,
 				options->effective_url);
-
-	curl_slist_free_all(headers);
-	strbuf_release(&buf);
 
 	return ret;
 }
@@ -2207,12 +2202,10 @@ struct http_pack_request *new_direct_http_pack_request(
 		goto abort;
 	}
 
-	preq->slot = get_active_slot();
+	preq->slot = get_active_slot(1);
 	curl_easy_setopt(preq->slot->curl, CURLOPT_WRITEDATA, preq->packfile);
 	curl_easy_setopt(preq->slot->curl, CURLOPT_WRITEFUNCTION, fwrite);
 	curl_easy_setopt(preq->slot->curl, CURLOPT_URL, preq->url);
-	curl_easy_setopt(preq->slot->curl, CURLOPT_HTTPHEADER,
-		no_pragma_header);
 
 	/*
 	 * If there is data present from a previous transfer attempt,
@@ -2377,14 +2370,13 @@ struct http_object_request *new_http_object_request(const char *base_url,
 		}
 	}
 
-	freq->slot = get_active_slot();
+	freq->slot = get_active_slot(1);
 
 	curl_easy_setopt(freq->slot->curl, CURLOPT_WRITEDATA, freq);
 	curl_easy_setopt(freq->slot->curl, CURLOPT_FAILONERROR, 0);
 	curl_easy_setopt(freq->slot->curl, CURLOPT_WRITEFUNCTION, fwrite_sha1_file);
 	curl_easy_setopt(freq->slot->curl, CURLOPT_ERRORBUFFER, freq->errorstr);
 	curl_easy_setopt(freq->slot->curl, CURLOPT_URL, freq->url);
-	curl_easy_setopt(freq->slot->curl, CURLOPT_HTTPHEADER, no_pragma_header);
 
 	/*
 	 * If we have successfully processed data from a previous fetch
