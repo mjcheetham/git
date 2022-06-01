@@ -514,18 +514,18 @@ static int curl_empty_auth_enabled(void)
 	return 0;
 }
 
-static void init_curl_http_auth(CURL *result)
+static void init_curl_http_auth(struct active_request_slot *slot)
 {
 	if (!http_auth.username || !*http_auth.username) {
 		if (curl_empty_auth_enabled())
-			curl_easy_setopt(result, CURLOPT_USERPWD, ":");
+			curl_easy_setopt(slot->curl, CURLOPT_USERPWD, ":");
 		return;
 	}
 
 	credential_fill(&http_auth);
 
-	curl_easy_setopt(result, CURLOPT_USERNAME, http_auth.username);
-	curl_easy_setopt(result, CURLOPT_PASSWORD, http_auth.password);
+	curl_easy_setopt(slot->curl, CURLOPT_USERNAME, http_auth.username);
+	curl_easy_setopt(slot->curl, CURLOPT_PASSWORD, http_auth.password);
 }
 
 /* *var must be free-able */
@@ -900,9 +900,6 @@ static CURL *get_curl_handle(void)
 #endif
 	}
 
-	if (http_proactive_auth)
-		init_curl_http_auth(result);
-
 	if (getenv("GIT_SSL_VERSION"))
 		ssl_version = getenv("GIT_SSL_VERSION");
 	if (ssl_version && *ssl_version) {
@@ -1259,6 +1256,7 @@ struct active_request_slot *get_active_slot(int no_pragma_header)
 	struct active_request_slot *slot = active_queue_head;
 	struct active_request_slot *newslot;
 
+	int proactive_auth;
 	int num_transfers;
 
 	/* Wait for a slot to open up if the queue is full */
@@ -1281,6 +1279,9 @@ struct active_request_slot *get_active_slot(int no_pragma_header)
 		slot = active_queue_head;
 		if (!slot) {
 			active_queue_head = newslot;
+
+			/* Auth first slot if asked for proactive auth */
+			proactive_auth = http_proactive_auth;
 		} else {
 			while (slot->next != NULL)
 				slot = slot->next;
@@ -1335,8 +1336,9 @@ struct active_request_slot *get_active_slot(int no_pragma_header)
 
 	curl_easy_setopt(slot->curl, CURLOPT_IPRESOLVE, git_curl_ipresolve);
 	curl_easy_setopt(slot->curl, CURLOPT_HTTPAUTH, http_auth_methods);
-	if (http_auth.password || curl_empty_auth_enabled())
-		init_curl_http_auth(slot->curl);
+
+	if (http_auth.password || curl_empty_auth_enabled() || proactive_auth)
+		init_curl_http_auth(slot);
 
 	return slot;
 }
