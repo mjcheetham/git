@@ -134,4 +134,8 @@
 #define GIT_CURL_HAVE_CURLOPT_PROTOCOLS_STR 1
 #endif
 
+#if LIBCURL_VERSION_NUM >= 0x075400
+#define GIT_CURL_HAVE_HEADER_API 1
+#endif
+
 #endif

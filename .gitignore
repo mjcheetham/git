@@ -76,6 +76,7 @@
 /git-hash-object
 /git-help
 /git-hook
+/git-http2
 /git-http-backend
 /git-http-fetch
 /git-http-push
