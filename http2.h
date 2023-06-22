@@ -96,6 +96,9 @@ struct http_response {
 void http_init(void);
 void http_cleanup(void);
 
+#define HTTP_OK	0
+#define HTTP_START_FAILED	1
+
 /* Perform an HTTP request with the specified parameters, returning the
  * resulting HTTP status code.
  * Results are stored in the response structure if specified. */
