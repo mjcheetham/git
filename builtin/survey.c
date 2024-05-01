@@ -343,6 +343,7 @@ struct survey_stats_trees {
 	 * tree is and if the repo has gigantic directories.
 	 */
 	uint64_t max_entries; /* max(nr_entries) -- the width of the largest tree */
+	struct object_id oid_max_entries; /* OID of the tree with the most entries */
 
 	/*
 	 * Computing the sum of the number of entries across all trees
@@ -578,8 +579,10 @@ static void traverse_object_cb_tree(struct object *obj)
 
 	pst->sum_entries += nr_entries;
 
-	if (nr_entries > pst->max_entries)
+	if (nr_entries > pst->max_entries) {
 		pst->max_entries = nr_entries;
+		oidcpy(&pst->oid_max_entries, &obj->oid);
+	}
 
 	qb = qbin(nr_entries);
 	incr_obj_hist_bin(&pst->entry_qbin[qb], object_length, disk_sizep);
@@ -968,8 +971,16 @@ static void survey_json(struct json_writer *jw, int pretty)
 		{
 			write_base_object_json(jw, &pst->base);
 
-			jw_object_intmax(jw, "max_entries", pst->max_entries);
 			jw_object_intmax(jw, "sum_entries", pst->sum_entries);
+
+			if (pst->max_entries) {
+				jw_object_inline_begin_object(jw, "largest_tree");
+				{
+					jw_object_intmax(jw, "entries", pst->max_entries);
+					jw_object_string(jw, "oid", oid_to_hex(&pst->oid_max_entries));
+				}
+				jw_end(jw);
+			}
 
 			write_qbin_json(jw, "dist_by_nr_entries", pst->entry_qbin);
 		}
