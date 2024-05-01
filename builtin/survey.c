@@ -322,6 +322,13 @@ struct survey_stats_commits {
 	 * Count of commits with k parents.
 	 */
 	uint32_t parent_cnt_pbin[PVEC_LEN];
+
+	/*
+	 * The largest commit.  This is probably just the commit with
+	 * the longest commit message.
+	 */
+	unsigned long size_largest;
+	struct object_id oid_largest;
 };
 
 /*
@@ -522,17 +529,29 @@ static int fill_in_base_object(struct survey_stats_base_object *base,
 static void traverse_commit_cb(struct commit *commit, void *data)
 {
 	struct survey_stats_commits *psc = &survey_stats.commits;
+	unsigned long object_length;
 	unsigned k;
 
 	display_progress(survey_progress, ++survey_progress_total);
 
-	fill_in_base_object(&psc->base, &commit->object, OBJ_COMMIT, NULL, NULL);
+	fill_in_base_object(&psc->base, &commit->object, OBJ_COMMIT, &object_length, NULL);
 
 	k = commit_list_count(commit->parents);
 	if (k >= PVEC_LEN)
 		k = PVEC_LEN - 1;
 
 	psc->parent_cnt_pbin[k]++;
+
+	/*
+	 * Remember the OID of the single largest commit.  This is
+	 * probably just the one with the longest commit message.
+	 * Note that this is for parity with `git-sizer` since we
+	 * already have a histogram based on the commit size elsewhere.
+	 */
+	if (object_length > psc->size_largest) {
+		psc->size_largest = object_length;
+		oidcpy(&psc->oid_largest, &commit->object.oid);
+	}
 }
 
 static void traverse_object_cb_tree(struct object *obj)
@@ -842,7 +861,6 @@ static void survey_json(struct json_writer *jw, int pretty)
 	struct survey_stats_commits *psc = &survey_stats.commits;
 	struct survey_stats_trees *pst = &survey_stats.trees;
 	struct survey_stats_blobs *psb = &survey_stats.blobs;
-	struct strbuf buf = STRBUF_INIT;
 	int k;
 
 	jw_object_begin(jw, pretty);
@@ -927,8 +945,22 @@ static void survey_json(struct json_writer *jw, int pretty)
 						strbuf_addf(&parent_key, "P%02d", k);
 						jw_object_intmax(jw, parent_key.buf, psc->parent_cnt_pbin[k]);
 					}
+				strbuf_release(&parent_key);
 			}
 			jw_end(jw);
+
+			if (psc->size_largest) {
+				jw_object_inline_begin_object(jw, "largest_commit");
+				{
+					jw_object_intmax(jw, "size", psc->size_largest);
+					/*
+					 * TODO Consider only printing OIDs when verbose or
+					 * have a PII flag.
+					 */
+					jw_object_string(jw, "oid", oid_to_hex(&psc->oid_largest));
+				}
+				jw_end(jw);
+			}
 		}
 		jw_end(jw);
 
