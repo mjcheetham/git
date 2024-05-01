@@ -324,6 +324,12 @@ struct survey_stats_commits {
 	uint32_t parent_cnt_pbin[PVEC_LEN];
 
 	/*
+	 * Remember the OID of the commit with the most number of parents.
+	 */
+	uint32_t max_parents;
+	struct object_id oid_max_parents;
+
+	/*
 	 * The largest commit.  This is probably just the commit with
 	 * the longest commit message.
 	 */
@@ -538,9 +544,14 @@ static void traverse_commit_cb(struct commit *commit, void *data)
 	fill_in_base_object(&psc->base, &commit->object, OBJ_COMMIT, &object_length, NULL);
 
 	k = commit_list_count(commit->parents);
+
+	if (k > psc->max_parents) {
+		psc->max_parents = k;
+		oidcpy(&psc->oid_max_parents, &commit->object.oid);
+	}
+
 	if (k >= PVEC_LEN)
 		k = PVEC_LEN - 1;
-
 	psc->parent_cnt_pbin[k]++;
 
 	/*
@@ -952,8 +963,17 @@ static void survey_json(struct json_writer *jw, int pretty)
 			}
 			jw_end(jw);
 
+			if (psc->max_parents) {
+				jw_object_inline_begin_object(jw, "most_parents");
+				{
+					jw_object_intmax(jw, "parents", psc->max_parents);
+					jw_object_string(jw, "oid", oid_to_hex(&psc->oid_max_parents));
+				}
+				jw_end(jw);
+			}
+
 			if (psc->size_largest) {
-				jw_object_inline_begin_object(jw, "largest_commit");
+				jw_object_inline_begin_object(jw, "largest_size");
 				{
 					jw_object_intmax(jw, "size", psc->size_largest);
 					/*
