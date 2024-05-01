@@ -369,6 +369,12 @@ struct survey_stats_trees {
  */
 struct survey_stats_blobs {
 	struct survey_stats_base_object base;
+
+	/*
+	 * Remember the OID of the largest blob.
+	 */
+	unsigned long size_largest;
+	struct object_id oid_largest;
 };
 
 struct survey_stats {
@@ -602,8 +608,17 @@ static void traverse_object_cb_tree(struct object *obj)
 static void traverse_object_cb_blob(struct object *obj)
 {
 	struct survey_stats_blobs *psb = &survey_stats.blobs;
+	unsigned long object_length;
 
-	fill_in_base_object(&psb->base, obj, OBJ_BLOB, NULL, NULL);
+	fill_in_base_object(&psb->base, obj, OBJ_BLOB, &object_length, NULL);
+
+	/*
+	 * Remember the OID of the single largest blob.
+	 */
+	if (object_length > psb->size_largest) {
+		psb->size_largest = object_length;
+		oidcpy(&psb->oid_largest, &obj->oid);
+	}
 }
 
 static void traverse_object_cb(struct object *obj, const char *name, void *data)
@@ -1010,6 +1025,15 @@ static void survey_json(struct json_writer *jw, int pretty)
 		jw_object_inline_begin_object(jw, "blobs");
 		{
 			write_base_object_json(jw, &psb->base);
+
+			if (psb->size_largest) {
+				jw_object_inline_begin_object(jw, "largest_size");
+				{
+					jw_object_intmax(jw, "size", psb->size_largest);
+					jw_object_string(jw, "oid", oid_to_hex(&psb->oid_largest));
+				}
+				jw_end(jw);
+			}
 		}
 		jw_end(jw);
 	}
