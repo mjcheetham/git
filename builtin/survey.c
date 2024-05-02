@@ -18,7 +18,7 @@
 #include "tree-walk.h"
 
 static const char * const survey_usage[] = {
-	N_("git survey [<options>])"),
+	N_("(EXPERIMENTAL!) git survey [<options>])"),
 	NULL,
 };
 
