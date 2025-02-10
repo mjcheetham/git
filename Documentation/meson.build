@@ -149,6 +149,7 @@ manpages = {
   'git-unpack-file.txt' : 1,
   'git-unpack-objects.txt' : 1,
   'git-update-index.txt' : 1,
+  'git-update-microsoft-git.txt' : 1,
   'git-update-ref.txt' : 1,
   'git-update-server-info.txt' : 1,
   'git-upload-archive.txt' : 1,
