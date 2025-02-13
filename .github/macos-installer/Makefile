@@ -79,6 +79,7 @@ $(BUILD_DIR)/git-$(VERSION)/osx-installed-man: $(BUILD_DIR)/git-$(VERSION)/osx-i
 	touch $@
 
 $(BUILD_DIR)/git-$(VERSION)/osx-built-subtree:
+	$(SUBMAKE) -C $(BUILD_DIR)/git-$(VERSION)/Documentation asciidoc.conf
 	cd $(BUILD_DIR)/git-$(VERSION)/contrib/subtree; $(SUBMAKE) XML_CATALOG_FILES="$(XML_CATALOG_FILES)" all git-subtree.1
 	touch $@
 
