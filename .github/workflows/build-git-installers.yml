@@ -46,7 +46,7 @@ jobs:
           # Verify tag follows rules in GIT-VERSION-GEN (i.e., matches the specified "DEF_VER" in
           # GIT-VERSION-FILE) and matches tag determined from trigger
           make GIT-VERSION-FILE
-          test "${{ steps.tag.outputs.version }}" == "$(sed -n 's/^GIT_VERSION = //p'< GIT-VERSION-FILE)" || die "GIT-VERSION-FILE tag does not match ${{ steps.tag.outputs.name }}"
+          test "${{ steps.tag.outputs.version }}" == "$(sed -n 's/^GIT_VERSION *= *//p'< GIT-VERSION-FILE)" || die "GIT-VERSION-FILE tag ($(cat GIT-VERSION-FILE)) does not match ${{ steps.tag.outputs.name }}"
   # End check prerequisites for the workflow
 
   # Build Windows installers (x86_64 & aarch64; installer & portable)
@@ -493,7 +493,7 @@ jobs:
   create-linux-unsigned-artifacts:
     runs-on: ubuntu-latest
     container:
-      image: ubuntu:16.04 # expanded security maintenance until 04/02/2026, according to https://endoflife.date/ubuntu
+      image: ubuntu:20.04 # security support until 04/02/2025, according to https://endoflife.date/ubuntu
       volumes:
         # override /__e/node20 because GitHub Actions uses a version that requires too-recent glibc, see "Install dependencies" below
         - /tmp:/__e/node20
@@ -502,6 +502,11 @@ jobs:
       - name: Install dependencies
         run: |
           set -ex
+
+          # Prevent the dialog that asks interactively for the timezone
+          export DEBIAN_FRONTEND=noninteractive
+          export TZ=Etc/UTC
+
           apt-get update -q
           apt-get install -y -q --no-install-recommends \
             build-essential \
