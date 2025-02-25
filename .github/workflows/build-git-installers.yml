@@ -780,8 +780,8 @@ jobs:
       - name: Download GPG public key signature file
         run: |
           az keyvault secret show --name "$GPG_PUBLIC_KEY_SECRET_NAME" \
-            --vault-name "$AZURE_VAULT" --query "value" \
-            | sed -e 's/^"//' -e 's/"$//' | base64 -d >msft-git-public.asc
+            --vault-name "$AZURE_VAULT" --query "value" --output tsv |
+            base64 -d >msft-git-public.asc
           mv msft-git-public.asc deb-package
 
       - uses: actions/github-script@v6

@@ -54,5 +54,5 @@ jobs:
 
           # Submit manifests
           $manifestDirectory = Split-Path "$manifestPath"
-          .\wingetcreate.exe submit -t "(az keyvault secret show --name ${{ secrets.WINGET_TOKEN_SECRET_NAME }} --vault-name ${{ secrets.AZURE_VAULT }} --query "value")" $manifestDirectory
+          .\wingetcreate.exe submit -t "(az keyvault secret show --name ${{ secrets.WINGET_TOKEN_SECRET_NAME }} --vault-name ${{ secrets.AZURE_VAULT }} --query "value" --output tsv)" $manifestDirectory
         shell: powershell
