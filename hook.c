@@ -12,6 +12,7 @@
 #include "strbuf.h"
 #include "environment.h"
 #include "setup.h"
+#include "simple-ipc.h"
 
 static int early_hooks_path_config(const char *var, const char *value,
 				   const struct config_context *ctx UNUSED, void *cb)
@@ -61,12 +62,30 @@ static const char *hook_path_early(const char *name, struct strbuf *result)
 	return result->buf;
 }
 
-const char *find_hook(struct repository *r, const char *name)
+static const char *find_hook_v2(struct repository *r MAYBE_UNUSED)
 {
 	static struct strbuf path = STRBUF_INIT;
+	static struct strbuf early_path = STRBUF_INIT;
+	strbuf_reset(&path);
+	strbuf_reset(&early_path);
 
-	int found_hook;
+	if (have_git_dir()) {
+		strbuf_add_absolute_path(&path, the_repository->gitdir);
+		strbuf_addstr(&path, "/hooks/ipc");
+		return path.buf;
+	}
 
+	if (!hook_path_early("ipc", &early_path))
+		return NULL;
+
+	strbuf_add_absolute_path(&path, early_path.buf);
+	return path.buf;
+}
+
+const char *find_hook(struct repository *r, const char *name)
+{
+	int found_hook = 0;
+	static struct strbuf path = STRBUF_INIT;
 	strbuf_reset(&path);
 	if (have_git_dir())
 		repo_git_path_replace(r, &path, "hooks/%s", name);
@@ -176,8 +195,8 @@ static void run_hooks_opt_clear(struct run_hooks_opt *options)
 	strvec_clear(&options->args);
 }
 
-int run_hooks_opt(struct repository *r, const char *hook_name,
-		  struct run_hooks_opt *options)
+static int run_hooks_opt_v1(struct repository *r, const char *hook_name,
+			   struct run_hooks_opt *options)
 {
 	struct strbuf abs_path = STRBUF_INIT;
 	struct hook_cb_data cb_data = {
@@ -185,8 +204,9 @@ int run_hooks_opt(struct repository *r, const char *hook_name,
 		.hook_name = hook_name,
 		.options = options,
 	};
-	const char *hook_path = find_hook(r, hook_name);
 	int ret = 0;
+	const char *hook_path = find_hook(r, hook_name);
+
 	const struct run_process_parallel_opts opts = {
 		.tr2_category = "hook",
 		.tr2_label = hook_name,
@@ -213,12 +233,6 @@ int run_hooks_opt(struct repository *r, const char *hook_name,
 	if (!hook_path && !strcmp(hook_name, "post-index-change"))
 		hook_path = find_hook(r, "post-indexchanged");
 
-	if (!options)
-		BUG("a struct run_hooks_opt must be provided to run_hooks");
-
-	if (options->invoked_hook)
-		*options->invoked_hook = 0;
-
 	if (!hook_path && !options->error_if_missing)
 		goto cleanup;
 
@@ -239,6 +253,81 @@ cleanup:
 	strbuf_release(&abs_path);
 	run_hooks_opt_clear(options);
 	return ret;
+}
+
+static int run_hooks_opt_v2(struct repository *r, const char *hook_name,
+			   struct run_hooks_opt *options)
+{
+	int ret = -1;
+	enum ipc_active_state state = IPC_STATE__OTHER_ERROR;
+	struct ipc_client_connection *connection = NULL;
+	struct ipc_client_connect_options ipc_opts
+		= IPC_CLIENT_CONNECT_OPTIONS_INIT;
+	const char *hook_ipc = find_hook_v2(r);
+	struct strbuf cmd = STRBUF_INIT;
+	struct strbuf answer = STRBUF_INIT;
+
+	/*
+	 * Build the hook IPC command message, which is formed as follows:
+	 *   <hook_name> <arg1> <arg2> ... <argN>
+	 */
+	strbuf_addf(&cmd, "%s ", hook_name);
+	for (size_t i = 0; i < options->args.nr; i++) {
+		strbuf_addf(&cmd, "%s ", options->args.v[i]);
+	}
+	strbuf_setlen(&cmd, cmd.len - 1); /* remove trailing space */
+
+	state = ipc_client_try_connect(hook_ipc, &ipc_opts, &connection);
+
+	switch (state) {
+	case IPC_STATE__LISTENING:
+		ret = ipc_client_send_command_to_connection(
+			connection, cmd.buf, cmd.len, &answer);
+
+		ipc_client_close_connection(connection);
+		strbuf_release(&cmd);
+
+		if (ret < 0) {
+			error(_("could not send '%s' event to hook IPC socket"),
+			      hook_name);
+			return -1;
+		}
+		break;
+	default:
+		if (options->error_if_missing) {
+			error(_("cannot connect to hook IPC socket"));
+			return -1;
+		}
+		break;
+	}
+
+	return 0;
+}
+
+int run_hooks_opt(struct repository *r, const char *hook_name,
+		  struct run_hooks_opt *options)
+{
+	int hooks_ver = 0;
+	if (!repo_config_get_int(r, "core.hooksVersion", &hooks_ver)) {
+		if (hooks_ver < 0 || hooks_ver > 2) {
+			warning(_("unknown value for core.hooksVersion: %d - assuming version 1"),
+				hooks_ver);
+			hooks_ver = 1;
+		}
+	}
+
+	if (!options)
+		BUG("a struct run_hooks_opt must be provided to run_hooks");
+
+	switch (hooks_ver) {
+	case 0:
+	case 1:
+		return run_hooks_opt_v1(r, hook_name, options);
+	case 2:
+		return run_hooks_opt_v2(r, hook_name, options);
+	default:
+		BUG("invalid core.hooksVersion: %d", hooks_ver);
+	}
 }
 
 int run_hooks(struct repository *r, const char *hook_name)
