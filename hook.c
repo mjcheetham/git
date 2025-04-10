@@ -271,11 +271,12 @@ static int run_hooks_opt_v2(struct repository *r, const char *hook_name,
 	/*
 	 * Build the hook IPC command message, which is formed as follows:
 	 *
-	 *   <hook_name>\0<arg1> <arg2> ... <argN>\0<env1>\0<env2> ... <envN>\0
+	 *   <hook_name>\0<arg1> <arg2> ... <argN>\0<pid>\0<env1>\0<env2> ... <envN>\0
 	 *
 	 * where <hook_name> is the name of the hook, <argN> are the arguments
-	 * passed to the hook, and <envN> are the environment variables passed
-	 * to the hook in the form of "key=value".
+	 * passed to the hook, <pid> is the PID of the process that started the
+	 * hook, and <envN> are the environment variables passed to the hook in
+	 * the form of "key=value".
 	 */
 
 	/* append hook name */
@@ -287,6 +288,10 @@ static int run_hooks_opt_v2(struct repository *r, const char *hook_name,
 		strbuf_addf(&cmd, "%s ", options->args.v[i]);
 	}
 	cmd.buf[cmd.len - 1] = '\0';
+
+	/* append PID */
+	strbuf_addf(&cmd, "%d", getpid());
+	strbuf_addch(&cmd, '\0');
 
 	/* append environment variables for the hook */
 	for (size_t i = 0; i < options->env.nr; i++) {
