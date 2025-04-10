@@ -266,16 +266,40 @@ static int run_hooks_opt_v2(struct repository *r, const char *hook_name,
 	const char *hook_ipc = find_hook_v2(r);
 	struct strbuf cmd = STRBUF_INIT;
 	struct strbuf answer = STRBUF_INIT;
+	char **env = environ;
 
 	/*
 	 * Build the hook IPC command message, which is formed as follows:
-	 *   <hook_name> <arg1> <arg2> ... <argN>
+	 *
+	 *   <hook_name>\0<arg1> <arg2> ... <argN>\0<env1>\0<env2> ... <envN>\0
+	 *
+	 * where <hook_name> is the name of the hook, <argN> are the arguments
+	 * passed to the hook, and <envN> are the environment variables passed
+	 * to the hook in the form of "key=value".
 	 */
-	strbuf_addf(&cmd, "%s ", hook_name);
+
+	/* append hook name */
+	strbuf_addstr(&cmd, hook_name);
+	strbuf_addch(&cmd, '\0');
+
+	/* append arguments */
 	for (size_t i = 0; i < options->args.nr; i++) {
 		strbuf_addf(&cmd, "%s ", options->args.v[i]);
 	}
-	strbuf_setlen(&cmd, cmd.len - 1); /* remove trailing space */
+	cmd.buf[cmd.len - 1] = '\0';
+
+	/* append environment variables for the hook */
+	for (size_t i = 0; i < options->env.nr; i++) {
+		strbuf_addf(&cmd, "%s", options->env.v[i]);
+		strbuf_addch(&cmd, '\0');
+	}
+
+	/* append general environment variables */
+	while (*env) {
+		strbuf_addf(&cmd, "%s", *env);
+		strbuf_addch(&cmd, '\0');
+		env++;
+	}
 
 	state = ipc_client_try_connect(hook_ipc, &ipc_opts, &connection);
 
