@@ -287,7 +287,10 @@ static int run_hooks_opt_v2(struct repository *r, const char *hook_name,
 	for (size_t i = 0; i < options->args.nr; i++) {
 		strbuf_addf(&cmd, "%s ", options->args.v[i]);
 	}
-	cmd.buf[cmd.len - 1] = '\0';
+	if (options->args.nr == 0)
+		strbuf_addch(&cmd, '\0');
+	else
+		cmd.buf[cmd.len - 1] = '\0';
 
 	/* append PID */
 	strbuf_addf(&cmd, "%d", getpid());
