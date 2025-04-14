@@ -14,6 +14,8 @@
 #include "setup.h"
 #include "simple-ipc.h"
 
+extern char **environ;
+
 static int early_hooks_path_config(const char *var, const char *value,
 				   const struct config_context *ctx UNUSED, void *cb)
 {
