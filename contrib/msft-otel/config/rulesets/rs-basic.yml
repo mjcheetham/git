@@ -1,0 +1,10 @@
+commands:
+  "git:rev-list":        "dl:drop"
+  "git:config":          "dl:drop"
+  "git:checkout#path":   "dl:drop"
+  "git:checkout#branch": "dl:verbose"
+  "git:checkout":        "dl:process"
+  "git":                 "dl:summary"
+
+defaults:
+  detail: "dl:drop"

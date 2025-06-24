@@ -1,0 +1,13 @@
+keynames:
+  nickname_key: "otel.trace2.nickname"
+  ruleset_key:  "otel.trace2.ruleset"
+
+nicknames:
+  microsoft: "dl:summary"
+  personal: "dl:drop"
+
+rulesets:
+  "rs:basic": "config/rulesets/rs-basic.yml"
+
+defaults:
+  ruleset: "rs:personal"

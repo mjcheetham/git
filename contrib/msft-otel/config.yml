@@ -1,0 +1,16 @@
+dist:
+  module: github.com/microsoft/git/msft-otel
+  description: Microsoft OpenTelemetry TRACE2 service.
+  output_path: src
+  version: v0.1.0
+
+exporters:
+  - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.126.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/azuredataexplorerexporter v0.126.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/azuremonitorexporter v0.126.0
+
+receivers:
+   - gomod: github.com/git-ecosystem/trace2receiver v0.5.7
+
+processors:
+  - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.126.0

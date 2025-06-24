@@ -53,6 +53,41 @@ jobs:
           test "${{ steps.tag.outputs.version }}" == "$(sed -n 's/^GIT_VERSION *= *//p'< GIT-VERSION-FILE)" || die "GIT-VERSION-FILE tag ($(cat GIT-VERSION-FILE)) does not match ${{ steps.tag.outputs.name }}"
   # End check prerequisites for the workflow
 
+  # Build OpenTelemetry collector
+  msft_otel:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: linux_x64
+            runner: ubuntu-latest
+          - name: windows_x64
+            runner: windows-2019
+          - name: windows_arm64
+            runner: windows-11-arm
+          - name: macos_arm64
+            runner: macos-latest-xl-arm64
+    runs-on: ${{ matrix.platform.runner }}
+    steps:
+      - name: Clone git
+        uses: actions/checkout@v4
+      - name: Build OpenTelemetry collector (${{ matrix.platform.name }})
+        run: |
+          set -x
+
+          # Generate the sources for the custom collector
+          ./contrib/msft-otel/generate.sh &&
+
+          # Run build script
+          ./contrib/msft-otel/build.sh
+      - name: Publish OpenTelemetry collector artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: msft-otel
+          path: ./contrib/msft-otel/out
+
+  # End build OpenTelemetry collector
+
   # Build Windows installers (x86_64 & aarch64; installer & portable)
   windows_pkg:
     environment: release
@@ -181,7 +216,7 @@ jobs:
           path: artifacts
   windows_artifacts:
     environment: release
-    needs: [prereqs, windows_pkg]
+    needs: [prereqs, windows_pkg, msft_otel]
     env:
       HOME: "${{github.workspace}}\\home"
     strategy:
@@ -192,11 +227,13 @@ jobs:
             artifact: pkg-x86_64
             toolchain: x86_64
             mingwprefix: mingw64
+            otel_platform: windows-x64
             runner: windows-2019
           - name: aarch64
             artifact: pkg-aarch64
             toolchain: clang-aarch64
             mingwprefix: clangarm64
+            otel_platform: windows-arm64
             runner: windows-11-arm
         type:
           - name: installer
@@ -210,6 +247,11 @@ jobs:
         with:
           name: ${{ matrix.arch.artifact }}
           path: ${{ matrix.arch.artifact }}
+      - name: Download OpenTelemetry collector
+        uses: actions/download-artifact@v4
+        with:
+          name: msft-otel
+          path: msft-otel
       - uses: git-for-windows/setup-git-for-windows-sdk@v1
         with:
           flavor: build-installers
@@ -333,6 +375,21 @@ jobs:
                   WizardSelectComponents('scalar');\n\
           #endif\n\
               end;" $b/installer/install.iss
+      - name: Add the OpenTelemetry component in the installer
+        shell: bash
+        run: |
+          set -x
+
+          b=/usr/src/build-extra &&
+
+          # Add the OpenTelemetry component to the installer components
+          sed -i -e '/^Name: windowsterminal;/a\Name: opentelemetry; Description: "(NEW!) OpenTelemetry collector for TRACE2"' \
+            $b/installer/install.iss &&
+
+          # Add msft-otel files to the installer for the opentelemetry component
+          sed -i '/^#include "file-list.iss"/a\Source: {#SourcePath}\\..\\msft-otel\\${{ matrix.arch.otel_platform }}\\*; DestDir: {app}\\msft-otel; Components: opentelemetry; Flags: recursesubdirs' \
+            $b/installer/install.iss
+
       - name: Build ${{matrix.type.name}} (${{matrix.arch.name}})
         shell: bash
         run: |
@@ -382,7 +439,7 @@ jobs:
   # Build and sign Mac OSX installers & upload artifacts
   create-macos-artifacts:
     runs-on: macos-latest-xl-arm64
-    needs: prereqs
+    needs: [prereqs, msft_otel]
     env:
       VERSION: "${{ needs.prereqs.outputs.tag_version }}"
     environment: release
@@ -391,6 +448,25 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: git
+
+      - name: Download OpenTelemetry collector
+        uses: actions/download-artifact@v4
+        with:
+          name: msft-otel
+          path: msft-otel
+
+      - name: Create universal binary for OpenTelemetry collector
+        run: |
+          set -x
+
+          # Copy all files (except the binary) from ARM64 so we can build a universal version
+          cp -R msft-otel/macos-arm64 msft-otel/macos-universal &&
+          rm -rf msft-otel/macos-universal/msft-git-otel &&
+
+          # Create a universal binary for the OpenTelemetry collector
+          lipo -create -output msft-otel/macos-universal/msft-git-otel \
+            msft-otel/macos-x64/msft-git-otel \
+            msft-otel/macos-arm64/msft-git-otel
 
       - name: Install Git dependencies
         run: |
@@ -520,6 +596,10 @@ jobs:
           cp git/config.mak payload/git-$VERSION/config.mak
           make -C git/.github/macos-installer V=1 payload
 
+          # Copy the OpenTelemetry collector
+          mkdir -p payload/usr/local/msft-otel
+          cp -R msft-otel/macos-universal/* payload/usr/local/msft-otel/
+
           # Codesign payload
           cp -R stage/git-universal-$VERSION/ \
             git/.github/macos-installer/build-artifacts
@@ -560,8 +640,14 @@ jobs:
       volumes:
         # override /__e/node20 because GitHub Actions uses a version that requires too-recent glibc, see "Install dependencies" below
         - /tmp:/__e/node20
-    needs: prereqs
+    needs: [prereqs, msft_otel]
     steps:
+      - name: Download OpenTelemetry collector
+        uses: actions/download-artifact@v4
+        with:
+          name: msft-otel
+          path: msft-otel
+
       - name: Install dependencies
         run: |
           set -ex
@@ -626,6 +712,11 @@ jobs:
             install install-doc install-html
 
           cd ..
+
+          # Copy the OpenTelemetry collector
+          mkdir -p "$PKGDIR/usr/local/lib/msft-otel"
+          cp -R msft-otel/linux_x64/* "$PKGDIR/usr/local/msft-otel/"
+
           mkdir "$PKGNAME/DEBIAN"
 
           # Based on https://packages.ubuntu.com/xenial/vcs/git

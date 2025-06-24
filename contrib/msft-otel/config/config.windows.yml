@@ -1,0 +1,25 @@
+receivers:
+  trace2receiver:
+    pipe:   ${env:TRACE2_PIPE}
+    filter: "config/filter.yml"
+    pii:    "config/pii.yml"
+
+processors:
+
+exporters:
+  debug:
+    verbosity: normal
+  azuremonitor:
+    connection_string: ${env:AZURE_MONITOR_CONNECTION_STRING}
+
+service:
+  telemetry:
+    metrics:
+      level: none
+    logs:
+      level: "INFO"
+  pipelines:
+    traces:
+      receivers: [trace2receiver]
+      processors: []
+      exporters: [debug, azuremonitor]
