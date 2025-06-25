@@ -13,6 +13,7 @@ static struct test_cmd cmds[] = {
 	{ "advise", cmd__advise_if_enabled },
 	{ "bitmap", cmd__bitmap },
 	{ "bloom", cmd__bloom },
+	{ "btree", cmd__bptree },
 	{ "bundle-uri", cmd__bundle_uri },
 	{ "cache-tree", cmd__cache_tree },
 	{ "chmtime", cmd__chmtime },
