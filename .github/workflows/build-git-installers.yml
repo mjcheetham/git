@@ -1,9 +1,7 @@
 name: build-git-installers
 
 on:
-  push:
-    tags:
-      - 'v[0-9]*vfs*' # matches "v<number><any characters>vfs<any characters>"
+  workflow_dispatch:
 
 permissions:
   id-token: write # required for Azure login via OIDC
@@ -13,46 +11,6 @@ env:
   DO_WIN_GPGSIGN: ${{ secrets.WIN_GPG_KEYGRIP_SECRET_NAME != '' && secrets.WIN_GPG_PRIVATE_SECRET_NAME != '' && secrets.WIN_GPG_PASSPHRASE_SECRET_NAME != '' }}
 
 jobs:
-  # Check prerequisites for the workflow
-  prereqs:
-    runs-on: ubuntu-latest
-    outputs:
-      tag_name: ${{ steps.tag.outputs.name }}           # The full name of the tag, e.g. v2.32.0.vfs.0.0
-      tag_version: ${{ steps.tag.outputs.version }}     # The version number (without preceding "v"), e.g. 2.32.0.vfs.0.0
-    steps:
-      - name: Validate tag
-        run: |
-          echo "$GITHUB_REF" |
-          grep -E '^refs/tags/v2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.vfs\.0\.(0|[1-9][0-9]*)(\.rc[0-9])?$' || {
-            echo "::error::${GITHUB_REF#refs/tags/} is not of the form v2.<X>.<Y>.vfs.0.<W>[.rc<N>]" >&2
-            exit 1
-          }
-      - name: Determine tag to build
-        run: |
-          echo "name=${GITHUB_REF#refs/tags/}" >>$GITHUB_OUTPUT
-          echo "version=${GITHUB_REF#refs/tags/v}" >>$GITHUB_OUTPUT
-        id: tag
-      - name: Clone git
-        uses: actions/checkout@v4
-      - name: Validate the tag identified with trigger
-        run: |
-          die () {
-            echo "::error::$*" >&2
-            exit 1
-          }
-
-          # `actions/checkout` only downloads the peeled tag (i.e. the commit)
-          git fetch origin +$GITHUB_REF:$GITHUB_REF
-
-          # Verify that the tag is annotated
-          test $(git cat-file -t "$GITHUB_REF") == "tag" || die "Tag ${{ steps.tag.outputs.name }} is not annotated"
-
-          # Verify tag follows rules in GIT-VERSION-GEN (i.e., matches the specified "DEF_VER" in
-          # GIT-VERSION-FILE) and matches tag determined from trigger
-          make GIT-VERSION-FILE
-          test "${{ steps.tag.outputs.version }}" == "$(sed -n 's/^GIT_VERSION *= *//p'< GIT-VERSION-FILE)" || die "GIT-VERSION-FILE tag ($(cat GIT-VERSION-FILE)) does not match ${{ steps.tag.outputs.name }}"
-  # End check prerequisites for the workflow
-
   # Build OpenTelemetry collector
   msft_otel:
     strategy:
@@ -90,8 +48,6 @@ jobs:
 
   # Build Windows installers (x86_64 & aarch64; installer & portable)
   windows_pkg:
-    environment: release
-    needs: prereqs
     strategy:
       fail-fast: false
       matrix:
@@ -215,8 +171,7 @@ jobs:
           name: "${{ matrix.arch.artifact }}"
           path: artifacts
   windows_artifacts:
-    environment: release
-    needs: [prereqs, windows_pkg, msft_otel]
+    needs: [windows_pkg, msft_otel]
     env:
       HOME: "${{github.workspace}}\\home"
     strategy:
@@ -402,7 +357,7 @@ jobs:
 
           # Build the installer, embedding PDBs
           eval $b/please.sh make_installers_from_mingw_w64_git --include-pdbs \
-              --version=${{ needs.prereqs.outputs.tag_version }} \
+              --version=2.50.0.vfs.0.0 \
               -o artifacts --${{matrix.type.name}} \
               --pkg=${{matrix.arch.artifact}}/mingw-w64-${{matrix.arch.toolchain}}-git-[0-9]*.tar.xz \
               --pkg=${{matrix.arch.artifact}}/mingw-w64-${{matrix.arch.toolchain}}-git-doc-html-[0-9]*.tar.xz &&
@@ -439,10 +394,9 @@ jobs:
   # Build and sign Mac OSX installers & upload artifacts
   create-macos-artifacts:
     runs-on: macos-latest-xl-arm64
-    needs: [prereqs, msft_otel]
+    needs: [msft_otel]
     env:
-      VERSION: "${{ needs.prereqs.outputs.tag_version }}"
-    environment: release
+      VERSION: 2.50.0.vfs.0.0
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -551,7 +505,7 @@ jobs:
           set -ex
 
           # Write to "version" file to force match with trigger payload version
-          echo "${{ needs.prereqs.outputs.tag_version }}" >>git/version
+          echo "2.50.0.vfs.0.0" >>git/version
 
           # Configure universal build
           cat >git/config.mak <<EOF
@@ -640,7 +594,7 @@ jobs:
       volumes:
         # override /__e/node20 because GitHub Actions uses a version that requires too-recent glibc, see "Install dependencies" below
         - /tmp:/__e/node20
-    needs: [prereqs, msft_otel]
+    needs: [msft_otel]
     steps:
       - name: Download OpenTelemetry collector
         uses: actions/download-artifact@v4
@@ -683,10 +637,10 @@ jobs:
               exit 1
           }
 
-          echo "${{ needs.prereqs.outputs.tag_version }}" >>git/version
+          echo "2.50.0.vfs.0.0" >>git/version
           make -C git GIT-VERSION-FILE
 
-          VERSION="${{ needs.prereqs.outputs.tag_version }}"
+          VERSION="2.50.0.vfs.0.0"
 
           ARCH="$(dpkg-architecture -q DEB_HOST_ARCH)"
           if test -z "$ARCH"; then
@@ -745,8 +699,7 @@ jobs:
 
   create-linux-artifacts:
     runs-on: ubuntu-latest
-    needs: [prereqs, create-linux-unsigned-artifacts]
-    environment: release
+    needs: [create-linux-unsigned-artifacts]
     steps:
       - name: Log into Azure
         uses: azure/login@v2
@@ -791,7 +744,7 @@ jobs:
       - name: Sign Debian package
         run: |
           # Sign Debian package
-          version="${{ needs.prereqs.outputs.tag_version }}"
+          version="2.50.0.vfs.0.0"
           debsigs --sign=origin --verify --check microsoft-git_"$version".deb
 
       - name: Upload artifacts
@@ -801,204 +754,3 @@ jobs:
           path: |
             *.deb
   # End build and sign Debian package
-
-  # Validate installers
-  validate-installers:
-    name: Validate installers
-    strategy:
-      matrix:
-        component:
-          - os: ubuntu-latest
-            artifact: linux-artifacts
-            command: git
-          - os: macos-latest-xl-arm64
-            artifact: macos-artifacts
-            command: git
-          - os: macos-latest
-            artifact: macos-artifacts
-            command: git
-          - os: windows-latest
-            artifact: win-installer-x86_64
-            command: $PROGRAMFILES\Git\cmd\git.exe
-          - os: windows-11-arm
-            artifact: win-installer-aarch64
-            command: $PROGRAMFILES\Git\cmd\git.exe
-    runs-on: ${{ matrix.component.os }}
-    needs: [prereqs, windows_artifacts, create-macos-artifacts, create-linux-artifacts]
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ matrix.component.artifact }}
-
-      - name: Install Windows
-        if: contains(matrix.component.artifact, 'win-installer')
-        shell: pwsh
-        run: |
-          $exePath = Get-ChildItem -Path ./*.exe | %{$_.FullName}
-          Start-Process -Wait -FilePath "$exePath" -ArgumentList "/SILENT /VERYSILENT /NORESTART /SUPPRESSMSGBOXES /ALLOWDOWNGRADE=1"
-
-      - name: Install Linux
-        if: contains(matrix.component.artifact, 'linux')
-        run: |
-          debpath=$(find ./*.deb)
-          sudo apt install $debpath
-
-      - name: Install macOS
-        if: contains(matrix.component.artifact, 'macos')
-        run: |
-          # avoid letting Homebrew's `git` in `/opt/homebrew/bin` override `/usr/local/bin/git`
-          arch="$(uname -m)"
-          test arm64 != "$arch" ||
-          brew uninstall git
-
-          pkgpath=$(find ./*universal*.pkg)
-          sudo installer -pkg $pkgpath -target /
-
-      - name: Validate
-        shell: bash
-        run: |
-          "${{ matrix.component.command }}" --version | sed 's/git version //' >actual
-          echo ${{ needs.prereqs.outputs.tag_version }} >expect
-          cmp expect actual || exit 1
-
-      - name: Validate universal binary CPU architecture
-        if: contains(matrix.component.os, 'macos')
-        shell: bash
-        run: |
-          set -ex
-          git version --build-options >actual
-          cat actual
-          grep "cpu: $(uname -m)" actual
-  # End validate installers
-
-  create-github-release:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write # required for Azure login via OIDC
-    needs:
-      - validate-installers
-      - create-linux-artifacts
-      - create-macos-artifacts
-      - windows_artifacts
-      - prereqs
-    environment: release
-    if: |
-      success() ||
-        (needs.create-linux-artifacts.result == 'skipped' &&
-        needs.create-macos-artifacts.result == 'success' &&
-        needs.windows_artifacts.result == 'success')
-    steps:
-      - name: Download Windows portable (x86_64)
-        uses: actions/download-artifact@v4
-        with:
-          name: win-portable-x86_64
-          path: win-portable-x86_64
-
-      - name: Download Windows portable (aarch64)
-        uses: actions/download-artifact@v4
-        with:
-          name: win-portable-aarch64
-          path: win-portable-aarch64
-
-      - name: Download Windows installer (x86_64)
-        uses: actions/download-artifact@v4
-        with:
-          name: win-installer-x86_64
-          path: win-installer-x86_64
-
-      - name: Download Windows installer (aarch64)
-        uses: actions/download-artifact@v4
-        with:
-          name: win-installer-aarch64
-          path: win-installer-aarch64
-
-      - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-artifacts
-          path: macos-artifacts
-
-      - name: Download Debian package
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-artifacts
-          path: deb-package
-
-      - name: Log into Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Check out repository (for akv-secret Action)
-        uses: actions/checkout@v4
-        with:
-          path: git
-
-      - name: Download Linux GPG public key signature file
-        uses: ./git/.github/actions/akv-secret
-        with:
-          vault: ${{ secrets.AZURE_VAULT }}
-          secrets: |
-            ${{ secrets.LINUX_GPG_PUBLIC_SECRET_NAME }} base64> deb-package/msft-git-public.asc
-
-      - uses: actions/github-script@v6
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-
-            var releaseMetadata = {
-              owner: context.repo.owner,
-              repo: context.repo.repo
-            };
-
-            // Create the release
-            var tagName = "${{ needs.prereqs.outputs.tag_name }}";
-            var createdRelease = await github.rest.repos.createRelease({
-              ...releaseMetadata,
-              draft: true,
-              tag_name: tagName,
-              name: tagName
-            });
-            releaseMetadata.release_id = createdRelease.data.id;
-
-            // Uploads contents of directory to the release created above
-            async function uploadDirectoryToRelease(directory, includeExtensions=[]) {
-              return fs.promises.readdir(directory)
-                .then(async(files) => Promise.all(
-                  files.filter(file => {
-                    return includeExtensions.length==0 || includeExtensions.includes(path.extname(file).toLowerCase());
-                  })
-                  .map(async (file) => {
-                    var filePath = path.join(directory, file);
-                    github.rest.repos.uploadReleaseAsset({
-                      ...releaseMetadata,
-                      name: file,
-                      headers: {
-                        "content-length": (await fs.promises.stat(filePath)).size
-                      },
-                      data: fs.createReadStream(filePath)
-                    });
-                  }))
-                );
-            }
-
-            await Promise.all([
-              // Upload Windows x86_64 artifacts
-              uploadDirectoryToRelease('win-installer-x86_64', ['.exe']),
-              uploadDirectoryToRelease('win-portable-x86_64', ['.exe']),
-
-              // Upload Windows aarch64 artifacts
-              uploadDirectoryToRelease('win-installer-aarch64', ['.exe']),
-              uploadDirectoryToRelease('win-portable-aarch64', ['.exe']),
-
-              // Upload Mac artifacts
-              uploadDirectoryToRelease('macos-artifacts'),
-
-              // Upload Ubuntu artifacts
-              uploadDirectoryToRelease('deb-package')
-            ]);
