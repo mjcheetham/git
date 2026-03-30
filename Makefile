@@ -2865,7 +2865,7 @@ ifdef INCLUDE_LIBGIT_RS
 endif
 
 ifndef NO_CURL
-	OBJECTS += http.o http-walker.o remote-curl.o
+	OBJECTS += http.o http-client.o http-common.o http-walker.o remote-curl.o
 endif
 
 .PHONY: objects

@@ -1845,6 +1845,8 @@ if curl.found()
   libgit_curl = declare_dependency(
     sources: [
       'http.c',
+      'http-client.c',
+      'http-common.c',
       'http-walker.c',
     ],
     dependencies: [libgit_commonmain, curl],

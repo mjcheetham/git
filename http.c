@@ -7,6 +7,7 @@
 #include "hex.h"
 #include "http.h"
 #include "config.h"
+#include "http-common.h"
 #include "pack.h"
 #include "run-command.h"
 #include "url.h"
@@ -1320,41 +1321,7 @@ void http_init(struct remote *remote, const char *url, int proactive_auth)
 	free(normalized_url);
 	string_list_clear(&config.vars, 1);
 
-	if (http_ssl_backend) {
-		const curl_ssl_backend **backends;
-		struct strbuf buf = STRBUF_INIT;
-		int i;
-
-		switch (curl_global_sslset(-1, http_ssl_backend, &backends)) {
-		case CURLSSLSET_UNKNOWN_BACKEND:
-			strbuf_addf(&buf, _("Unsupported SSL backend '%s'. "
-					    "Supported SSL backends:"),
-					    http_ssl_backend);
-			for (i = 0; backends[i]; i++)
-				strbuf_addf(&buf, "\n\t%s", backends[i]->name);
-			die("%s", buf.buf);
-		case CURLSSLSET_NO_BACKENDS:
-			die(_("Could not set SSL backend to '%s': "
-			      "cURL was built without SSL backends"),
-			    http_ssl_backend);
-		case CURLSSLSET_TOO_LATE:
-			die(_("Could not set SSL backend to '%s': already set"),
-			    http_ssl_backend);
-		case CURLSSLSET_OK:
-			break; /* Okay! */
-		}
-	}
-
-	if (curl_global_init(CURL_GLOBAL_ALL) != CURLE_OK)
-		die("curl_global_init failed");
-
-#ifdef GIT_CURL_HAVE_GLOBAL_TRACE
-	{
-		const char *comp = getenv("GIT_TRACE_CURL_COMPONENTS");
-		if (comp)
-			curl_global_trace(comp);
-	}
-#endif
+	git_curl_global_init(http_ssl_backend);
 
 	if (proactive_auth && http_proactive_auth == PROACTIVE_AUTH_NONE)
 		http_proactive_auth = PROACTIVE_AUTH_IF_CREDENTIALS;
@@ -1443,7 +1410,7 @@ void http_cleanup(void)
 	curl_easy_cleanup(curl_default);
 
 	curl_multi_cleanup(curlm);
-	curl_global_cleanup();
+	git_curl_global_cleanup();
 
 	string_list_clear(&extra_http_headers, 0);
 
