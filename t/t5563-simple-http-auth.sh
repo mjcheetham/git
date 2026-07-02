@@ -89,12 +89,14 @@ test_expect_success 'access using basic auth' '
 	capability[]=state
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	wwwauth[]=Basic realm="example.com"
 	EOF
 
 	expect_credential_query store <<-EOF
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	username=alice
 	password=secret-passwd
 	EOF
@@ -127,6 +129,7 @@ test_expect_success 'access using basic auth via authtype' '
 	capability[]=state
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	wwwauth[]=Basic realm="example.com"
 	EOF
 
@@ -136,6 +139,7 @@ test_expect_success 'access using basic auth via authtype' '
 	credential=YWxpY2U6c2VjcmV0LXBhc3N3ZA==
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	EOF
 '
 
@@ -165,12 +169,14 @@ test_expect_success 'access using basic auth invalid credentials' '
 	capability[]=state
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	wwwauth[]=Basic realm="example.com"
 	EOF
 
 	expect_credential_query erase <<-EOF
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	username=baduser
 	password=wrong-passwd
 	wwwauth[]=Basic realm="example.com"
@@ -210,6 +216,7 @@ test_expect_success 'access using basic proactive auth' '
 	expect_credential_query store <<-EOF
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	username=alice
 	password=secret-passwd
 	EOF
@@ -247,6 +254,7 @@ test_expect_success 'access using auto proactive auth with basic default' '
 	expect_credential_query store <<-EOF
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	username=alice
 	password=secret-passwd
 	EOF
@@ -290,6 +298,7 @@ test_expect_success 'access using auto proactive auth with authtype from credent
 	credential=YS1naXQtdG9rZW4=
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	EOF
 '
 
@@ -321,6 +330,7 @@ test_expect_success 'access using basic auth with extra challenges' '
 	capability[]=state
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	wwwauth[]=FooBar param1="value1" param2="value2"
 	wwwauth[]=Bearer authorize_uri="id.example.com" p=1 q=0
 	wwwauth[]=Basic realm="example.com"
@@ -329,6 +339,7 @@ test_expect_success 'access using basic auth with extra challenges' '
 	expect_credential_query store <<-EOF
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	username=alice
 	password=secret-passwd
 	EOF
@@ -362,6 +373,7 @@ test_expect_success 'access using basic auth mixed-case wwwauth header name' '
 	capability[]=state
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	wwwauth[]=foobar param1="value1" param2="value2"
 	wwwauth[]=BEARER authorize_uri="id.example.com" p=1 q=0
 	wwwauth[]=baSiC realm="example.com"
@@ -370,6 +382,7 @@ test_expect_success 'access using basic auth mixed-case wwwauth header name' '
 	expect_credential_query store <<-EOF
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	username=alice
 	password=secret-passwd
 	EOF
@@ -408,6 +421,7 @@ test_expect_success 'access using basic auth with wwwauth header continuations' 
 	capability[]=state
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	wwwauth[]=FooBar param1="value1" param2="value2"
 	wwwauth[]=Bearer authorize_uri="id.example.com" p=1 q=0
 	wwwauth[]=Basic realm="example.com"
@@ -416,6 +430,7 @@ test_expect_success 'access using basic auth with wwwauth header continuations' 
 	expect_credential_query store <<-EOF
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	username=alice
 	password=secret-passwd
 	EOF
@@ -456,6 +471,7 @@ test_expect_success 'access using basic auth with wwwauth header empty continuat
 	capability[]=state
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	wwwauth[]=FooBar param1="value1" param2="value2"
 	wwwauth[]=Bearer authorize_uri="id.example.com" p=1 q=0
 	wwwauth[]=Basic realm="example.com"
@@ -464,6 +480,7 @@ test_expect_success 'access using basic auth with wwwauth header empty continuat
 	expect_credential_query store <<-EOF
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	username=alice
 	password=secret-passwd
 	EOF
@@ -500,6 +517,7 @@ test_expect_success 'access using basic auth with wwwauth header mixed continuat
 	capability[]=state
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	wwwauth[]=FooBar param1="value1" param2="value2"
 	wwwauth[]=Basic realm="example.com"
 	EOF
@@ -507,6 +525,7 @@ test_expect_success 'access using basic auth with wwwauth header mixed continuat
 	expect_credential_query store <<-EOF
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	username=alice
 	password=secret-passwd
 	EOF
@@ -543,6 +562,7 @@ test_expect_success 'access using bearer auth' '
 	capability[]=state
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	wwwauth[]=FooBar param1="value1" param2="value2"
 	wwwauth[]=Bearer authorize_uri="id.example.com" p=1 q=0
 	wwwauth[]=Basic realm="example.com"
@@ -554,6 +574,7 @@ test_expect_success 'access using bearer auth' '
 	credential=YS1naXQtdG9rZW4=
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	EOF
 '
 
@@ -588,6 +609,7 @@ test_expect_success 'access using bearer auth with invalid credentials' '
 	capability[]=state
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	wwwauth[]=FooBar param1="value1" param2="value2"
 	wwwauth[]=Bearer authorize_uri="id.example.com" p=1 q=0
 	wwwauth[]=Basic realm="example.com"
@@ -599,6 +621,7 @@ test_expect_success 'access using bearer auth with invalid credentials' '
 	credential=incorrect-token
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	wwwauth[]=FooBar param1="value1" param2="value2"
 	wwwauth[]=Bearer authorize_uri="id.example.com" p=1 q=0
 	wwwauth[]=Basic realm="example.com"
@@ -693,6 +716,7 @@ test_expect_success 'access using three-legged auth' '
 	capability[]=state
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	wwwauth[]=Multistage challenge="123"
 	wwwauth[]=Bearer authorize_uri="id.example.com" p=1 q=0
 	EOF
@@ -703,6 +727,7 @@ test_expect_success 'access using three-legged auth' '
 	authtype=Multistage
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	wwwauth[]=Multistage challenge="456"
 	wwwauth[]=Bearer authorize_uri="id.example.com" p=1 q=0
 	state[]=helper:foobar
@@ -715,6 +740,7 @@ test_expect_success 'access using three-legged auth' '
 	credential=YW5vdGhlci10b2tlbg==
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	state[]=helper:bazquux
 	EOF
 '
@@ -758,6 +784,7 @@ test_expect_success SPNEGO 'http.emptyAuth=auto attempts Negotiate before creden
 	capability[]=state
 	protocol=http
 	host=$HTTPD_DEST
+	request_url=$HTTPD_URL/custom_auth/repo.git/info/refs?service=git-upload-pack
 	wwwauth[]=Negotiate
 	wwwauth[]=Basic realm="example.com"
 	EOF

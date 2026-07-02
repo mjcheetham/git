@@ -889,6 +889,8 @@ static int probe_rpc(struct rpc_state *rpc, struct slot_results *results)
 	headers = curl_slist_append(headers, rpc->hdr_accept);
 	headers = http_append_auth_header(&http_auth, headers);
 
+	http_set_request_url(rpc->service_url);
+
 	curl_easy_setopt(slot->curl, CURLOPT_NOBODY, 0L);
 	curl_easy_setopt(slot->curl, CURLOPT_POST, 1L);
 	curl_easy_setopt(slot->curl, CURLOPT_URL, rpc->service_url);
@@ -973,6 +975,8 @@ retry:
 		headers = curl_slist_append(headers, rpc->protocol_header);
 
 	slot = get_active_slot();
+
+	http_set_request_url(rpc->service_url);
 
 	curl_easy_setopt(slot->curl, CURLOPT_NOBODY, 0L);
 	curl_easy_setopt(slot->curl, CURLOPT_POST, 1L);

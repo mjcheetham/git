@@ -666,6 +666,12 @@ static void init_curl_http_auth(CURL *result)
 	}
 }
 
+void http_set_request_url(const char *url)
+{
+	free(http_auth.request_url);
+	http_auth.request_url = url ? xstrdup(url) : NULL;
+}
+
 void http_reauth_prepare(int all_capabilities)
 {
 	/*
@@ -2231,6 +2237,13 @@ static int http_request(const char *url,
 	struct strbuf buf = STRBUF_INIT;
 	const char *accept_language;
 	int ret;
+
+	/*
+	 * Record the URL we are about to request so that, should this request
+	 * require authentication, credential helpers receive the full request
+	 * URL that was tried (not just the protocol/host/path we match on).
+	 */
+	http_set_request_url(url);
 
 	slot = get_active_slot();
 	curl_easy_setopt(slot->curl, CURLOPT_HTTPGET, 1L);

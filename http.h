@@ -77,6 +77,14 @@ extern ssize_t http_post_buffer;
 extern struct credential http_auth;
 
 /**
+ * Record the full URL of the request Git is about to make, so that any
+ * credential helper consulted for this request receives it as the
+ * `request_url` attribute. This is informational context only and is not
+ * used to look up or match credentials.
+ */
+void http_set_request_url(const char *url);
+
+/**
  * Prepare for an HTTP re-authentication retry. This fills credentials
  * via credential_fill() so the next request can include them.
  */
