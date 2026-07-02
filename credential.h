@@ -183,6 +183,16 @@ struct credential {
 	char *protocol;
 	char *host;
 	char *path;
+
+	/**
+	 * The full URL of the request for which the credential is needed, as
+	 * Git actually tried it. Unlike the `protocol`, `host`, and `path`
+	 * fields, this is not used to look up or match credentials; it is
+	 * passed to helpers verbatim so that they have the complete request
+	 * context (for example, query parameters that are dropped from `path`).
+	 */
+	char *request_url;
+
 	char *oauth_refresh_token;
 	timestamp_t password_expiry_utc;
 

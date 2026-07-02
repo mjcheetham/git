@@ -28,6 +28,7 @@ void credential_clear(struct credential *c)
 	free(c->protocol);
 	free(c->host);
 	free(c->path);
+	free(c->request_url);
 	free(c->username);
 	free(c->oauth_refresh_token);
 	free(c->authtype);
@@ -349,6 +350,9 @@ int credential_read(struct credential *c, FILE *fp,
 		} else if (!strcmp(key, "path")) {
 			free(c->path);
 			c->path = xstrdup(value);
+		} else if (!strcmp(key, "request_url")) {
+			free(c->request_url);
+			c->request_url = xstrdup(value);
 		} else if (!strcmp(key, "ephemeral")) {
 			c->ephemeral = !!git_config_bool("ephemeral", value);
 		} else if (!strcmp(key, "wwwauth[]")) {
@@ -423,6 +427,7 @@ void credential_write(const struct credential *c, FILE *fp,
 	credential_write_item(c, fp, "protocol", c->protocol, 1);
 	credential_write_item(c, fp, "host", c->host, 1);
 	credential_write_item(c, fp, "path", c->path, 0);
+	credential_write_item(c, fp, "request_url", c->request_url, 0);
 	credential_write_item(c, fp, "username", c->username, 0);
 	credential_write_item(c, fp, "password", c->password, 0);
 	credential_write_item(c, fp, "oauth_refresh_token", c->oauth_refresh_token, 0);

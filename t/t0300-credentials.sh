@@ -99,6 +99,45 @@ test_expect_success 'credential_fill invokes helper' '
 	EOF
 '
 
+test_expect_success 'credential_fill passes request_url to helpers' '
+	check fill "verbatim foo bar" <<-\EOF
+	protocol=https
+	host=example.com
+	request_url=https://example.com/repo.git/info/refs?service=git-upload-pack
+	--
+	protocol=https
+	host=example.com
+	request_url=https://example.com/repo.git/info/refs?service=git-upload-pack
+	username=foo
+	password=bar
+	--
+	verbatim: get
+	verbatim: protocol=https
+	verbatim: host=example.com
+	verbatim: request_url=https://example.com/repo.git/info/refs?service=git-upload-pack
+	EOF
+'
+
+test_expect_success 'request_url survives http path stripping' '
+	check fill "verbatim foo bar" <<-\EOF
+	protocol=http
+	host=example.com
+	path=repo.git
+	request_url=http://example.com/repo.git/info/refs?service=git-upload-pack
+	--
+	protocol=http
+	host=example.com
+	request_url=http://example.com/repo.git/info/refs?service=git-upload-pack
+	username=foo
+	password=bar
+	--
+	verbatim: get
+	verbatim: protocol=http
+	verbatim: host=example.com
+	verbatim: request_url=http://example.com/repo.git/info/refs?service=git-upload-pack
+	EOF
+'
+
 test_expect_success 'credential_fill invokes helper with credential' '
 	check fill "verbatim-cred Bearer token" <<-\EOF
 	capability[]=authtype
