@@ -719,7 +719,8 @@ extends:
               #   5. `make pkg` -> unsigned .pkg in disk-image/.
               #   6. ESRP-sign and ESRP-notarize the .pkg in place.
               #   7. `make image` wraps disk-image/ contents in a DMG.
-              #   8. Stage the .pkg and .dmg under _final/ for upload.
+              #   8. Archive build-artifacts/ as a binary .tar.gz and
+              #      stage it with the .pkg and .dmg under _final/ for upload.
               steps:
                 - checkout: self
                 - task: Bash@3
@@ -1028,28 +1029,32 @@ extends:
                       VERSION="$(git_version)"
                       export VERSION
 
-                      # Builds git-<version>-$(cc_arch).dmg from disk-image/,
-                      # which contains the signed and notarized .pkg.
+                      # Wrap the signed and notarized .pkg from disk-image/
+                      # in git-<version>-macos-$(cc_arch).dmg.
                       make -C .github/macos-installer V=1 ARCH_UNIV=$(cc_arch) image
                 - task: Bash@3
-                  displayName: 'Stage installer artifacts for upload'
+                  displayName: 'Stage release artifacts for upload'
                   inputs:
                     targetType: inline
                     script: |
                       set -euo pipefail
 
-                      mkdir -p "$(Build.ArtifactStagingDirectory)/_final"
+                      final_dir="$(Build.ArtifactStagingDirectory)/_final"
+                      mkdir -p "$final_dir"
                       ls -la .github/macos-installer/ \
                              .github/macos-installer/disk-image/ || true
                       # The .pkg lands either directly under disk-image/
                       # or, after ESRP MacAppNotarize re-packs it, inside
                       # disk-image/<uuid>.zip.unzipped/. Find it.
                       pkg=$(find .github/macos-installer/disk-image \
-                              -name "git-*-$(cc_arch).pkg" -type f \
+                              -name "git-*-macos-$(cc_arch).pkg" -type f \
                               | head -1)
-                      mv .github/macos-installer/git-*-$(cc_arch).dmg \
+                      mv .github/macos-installer/git-*-macos-$(cc_arch).dmg \
                          "$pkg" \
-                         "$(Build.ArtifactStagingDirectory)/_final/"
+                         "$final_dir/"
+                      tar -czf \
+                        "$final_dir/git-$(git_version)-macos-$(cc_arch).tar.gz" \
+                        -C .github/macos-installer/build-artifacts usr
                 # Validate the freshly built pkg in-place: install it,
                 # assert `git --version`, and confirm the binary contains
                 # only the specific architecture. Folded into the build job
@@ -1061,9 +1066,9 @@ extends:
                       brew uninstall git || true
                     fi
                     pkg=$(find "$(Build.ArtifactStagingDirectory)/_final" \
-                      -name "git-*-$(cc_arch).pkg" -type f | head -1)
+                      -name "git-*-macos-$(cc_arch).pkg" -type f | head -1)
                     if [ -z "$pkg" ]; then
-                      echo "No git-*-$(cc_arch).pkg found in _final" >&2
+                      echo "No git-*-macos-$(cc_arch).pkg found in _final" >&2
                       exit 1
                     fi
                     echo "Installing $pkg"
@@ -1151,7 +1156,7 @@ extends:
                       echo "$BUILD_VERSION" >version
                       make GIT-VERSION-FILE
 
-                      PKGNAME="microsoft-git_${VERSION}_$(deb_arch)"
+                      PKGNAME="microsoft-git_${VERSION}_linux_$(deb_arch)"
                       PKGDIR="$(Build.ArtifactStagingDirectory)/pkgroot"
                       rm -rf "$PKGDIR"
                       mkdir -p "$PKGDIR/DEBIAN"
@@ -1208,14 +1213,18 @@ extends:
                           }
                         ]
                 - task: Bash@3
-                  displayName: 'Stage Debian package for upload'
+                  displayName: 'Stage release artifacts for upload'
                   inputs:
                     targetType: inline
                     script: |
                       set -euo pipefail
-                      mkdir -p "$(Build.ArtifactStagingDirectory)/_final"
-                      mv "$(Build.ArtifactStagingDirectory)/app/microsoft-git_$(git_version)_$(deb_arch).deb" \
-                        "$(Build.ArtifactStagingDirectory)/_final/"
+
+                      staging_dir="$(Build.ArtifactStagingDirectory)"
+                      mkdir -p "$staging_dir/_final"
+                      pkg_name="microsoft-git_$(git_version)_linux_$(deb_arch)"
+                      mv "$staging_dir/app/$pkg_name.deb" "$staging_dir/_final/"
+                      tar -czf "$staging_dir/_final/$pkg_name.tar.gz" \
+                      -C "$staging_dir/pkgroot" usr
                 # Validate the freshly built .deb in-place: install it
                 # and assert `git --version`. Folded into the build job
                 # so it runs on the same agent without the 1ES job-
