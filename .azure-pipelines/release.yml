@@ -1053,7 +1053,7 @@ extends:
                          "$pkg" \
                          "$final_dir/"
                       tar -czf \
-                        "$final_dir/git-$(git_version)-$(cc_arch).tar.gz" \
+                        "$final_dir/git-$(git_version)-macos-$(cc_arch).tar.gz" \
                         -C .github/macos-installer/build-artifacts usr
                 # Validate the freshly built pkg in-place: install it,
                 # assert `git --version`, and confirm the binary contains
@@ -1220,10 +1220,9 @@ extends:
                       set -euo pipefail
 
                       staging_dir="$(Build.ArtifactStagingDirectory)"
-                      pkg_name="microsoft-git_$(git_version)_$(deb_arch)"
                       mkdir -p "$staging_dir/_final"
-                      mv "$staging_dir/app/$pkg_name.deb" "$staging_dir/_final/"
-                      tar -czf "$staging_dir/_final/$pkg_name.tar.gz" \
+                      mv "$staging_dir/app/microsoft-git_$(git_version)_$(deb_arch).deb" "$staging_dir/_final/"
+                      tar -czf "$staging_dir/_final/microsoft-git_$(git_version)_linux_$(deb_arch).tar.gz" \
                         -C "$staging_dir/pkgroot" usr
                 # Validate the freshly built .deb in-place: install it
                 # and assert `git --version`. Folded into the build job
