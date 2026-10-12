@@ -719,7 +719,8 @@ extends:
               #   5. `make pkg` -> unsigned .pkg in disk-image/.
               #   6. ESRP-sign and ESRP-notarize the .pkg in place.
               #   7. `make image` wraps disk-image/ contents in a DMG.
-              #   8. Stage the .pkg and .dmg under _final/ for upload.
+              #   8. Archive build-artifacts/ as a binary .tar.gz and
+              #      stage it with the .pkg and .dmg under _final/ for upload.
               steps:
                 - checkout: self
                 - task: Bash@3
@@ -1032,13 +1033,14 @@ extends:
                       # which contains the signed and notarized .pkg.
                       make -C .github/macos-installer V=1 ARCH_UNIV=$(cc_arch) image
                 - task: Bash@3
-                  displayName: 'Stage installer artifacts for upload'
+                  displayName: 'Stage release artifacts for upload'
                   inputs:
                     targetType: inline
                     script: |
                       set -euo pipefail
 
-                      mkdir -p "$(Build.ArtifactStagingDirectory)/_final"
+                      final_dir="$(Build.ArtifactStagingDirectory)/_final"
+                      mkdir -p "$final_dir"
                       ls -la .github/macos-installer/ \
                              .github/macos-installer/disk-image/ || true
                       # The .pkg lands either directly under disk-image/
@@ -1049,7 +1051,10 @@ extends:
                               | head -1)
                       mv .github/macos-installer/git-*-$(cc_arch).dmg \
                          "$pkg" \
-                         "$(Build.ArtifactStagingDirectory)/_final/"
+                         "$final_dir/"
+                      tar -czf \
+                        "$final_dir/git-$(git_version)-$(cc_arch).tar.gz" \
+                        -C .github/macos-installer/build-artifacts usr
                 # Validate the freshly built pkg in-place: install it,
                 # assert `git --version`, and confirm the binary contains
                 # only the specific architecture. Folded into the build job
@@ -1208,14 +1213,18 @@ extends:
                           }
                         ]
                 - task: Bash@3
-                  displayName: 'Stage Debian package for upload'
+                  displayName: 'Stage release artifacts for upload'
                   inputs:
                     targetType: inline
                     script: |
                       set -euo pipefail
-                      mkdir -p "$(Build.ArtifactStagingDirectory)/_final"
-                      mv "$(Build.ArtifactStagingDirectory)/app/microsoft-git_$(git_version)_$(deb_arch).deb" \
-                        "$(Build.ArtifactStagingDirectory)/_final/"
+
+                      staging_dir="$(Build.ArtifactStagingDirectory)"
+                      pkg_name="microsoft-git_$(git_version)_$(deb_arch)"
+                      mkdir -p "$staging_dir/_final"
+                      mv "$staging_dir/app/$pkg_name.deb" "$staging_dir/_final/"
+                      tar -czf "$staging_dir/_final/$pkg_name.tar.gz" \
+                        -C "$staging_dir/pkgroot" usr
                 # Validate the freshly built .deb in-place: install it
                 # and assert `git --version`. Folded into the build job
                 # so it runs on the same agent without the 1ES job-
