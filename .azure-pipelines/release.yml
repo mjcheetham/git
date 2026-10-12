@@ -160,12 +160,12 @@ extends:
                   inputs:
                     azureSubscription: $(esrpAppConnectionName)
                     addSpnToEnvironment: true
-                    scriptType: ps
+                    scriptType: bash
                     scriptLocation: inlineScript
                     inlineScript: |
-                      Write-Host "ESRP connection details:"
-                      Write-Host "ClientId: $env:servicePrincipalId"
-                      Write-Host "TenantId: $env:tenantId"
+                      echo "ESRP connection details:"
+                      echo "ClientId: $servicePrincipalId"
+                      echo "TenantId: $tenantId"
 
       - stage: build
         displayName: 'Build'
