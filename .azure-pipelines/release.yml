@@ -158,7 +158,7 @@ extends:
                 - task: AzureCLI@2
                   displayName: 'Prepare ESRP connection'
                   inputs:
-                    azureSubscription: ${{ parameters.serviceConnectionName }}
+                    azureSubscription: $(esrpAppConnectionName)
                     addSpnToEnvironment: true
                     scriptType: ps
                     scriptLocation: inlineScript
