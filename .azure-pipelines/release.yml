@@ -1156,7 +1156,7 @@ extends:
                       echo "$BUILD_VERSION" >version
                       make GIT-VERSION-FILE
 
-                      PKGNAME="microsoft-git_${VERSION}_$(deb_arch)"
+                      PKGNAME="microsoft-git_${VERSION}_linux_$(deb_arch)"
                       PKGDIR="$(Build.ArtifactStagingDirectory)/pkgroot"
                       rm -rf "$PKGDIR"
                       mkdir -p "$PKGDIR/DEBIAN"
@@ -1221,9 +1221,10 @@ extends:
 
                       staging_dir="$(Build.ArtifactStagingDirectory)"
                       mkdir -p "$staging_dir/_final"
-                      mv "$staging_dir/app/microsoft-git_$(git_version)_$(deb_arch).deb" "$staging_dir/_final/"
-                      tar -czf "$staging_dir/_final/microsoft-git_$(git_version)_linux_$(deb_arch).tar.gz" \
-                        -C "$staging_dir/pkgroot" usr
+                      pkg_name="microsoft-git_$(git_version)_linux_$(deb_arch)"
+                      mv "$staging_dir/app/$pkg_name.deb" "$staging_dir/_final/"
+                      tar -czf "$staging_dir/_final/$pkg_name.tar.gz" \
+                      -C "$staging_dir/pkgroot" usr
                 # Validate the freshly built .deb in-place: install it
                 # and assert `git --version`. Folded into the build job
                 # so it runs on the same agent without the 1ES job-
