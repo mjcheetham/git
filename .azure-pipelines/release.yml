@@ -1029,8 +1029,8 @@ extends:
                       VERSION="$(git_version)"
                       export VERSION
 
-                      # Builds git-<version>-$(cc_arch).dmg from disk-image/,
-                      # which contains the signed and notarized .pkg.
+                      # Wrap the signed and notarized .pkg from disk-image/
+                      # in git-<version>-macos-$(cc_arch).dmg.
                       make -C .github/macos-installer V=1 ARCH_UNIV=$(cc_arch) image
                 - task: Bash@3
                   displayName: 'Stage release artifacts for upload'
@@ -1047,9 +1047,9 @@ extends:
                       # or, after ESRP MacAppNotarize re-packs it, inside
                       # disk-image/<uuid>.zip.unzipped/. Find it.
                       pkg=$(find .github/macos-installer/disk-image \
-                              -name "git-*-$(cc_arch).pkg" -type f \
+                              -name "git-*-macos-$(cc_arch).pkg" -type f \
                               | head -1)
-                      mv .github/macos-installer/git-*-$(cc_arch).dmg \
+                      mv .github/macos-installer/git-*-macos-$(cc_arch).dmg \
                          "$pkg" \
                          "$final_dir/"
                       tar -czf \
@@ -1066,9 +1066,9 @@ extends:
                       brew uninstall git || true
                     fi
                     pkg=$(find "$(Build.ArtifactStagingDirectory)/_final" \
-                      -name "git-*-$(cc_arch).pkg" -type f | head -1)
+                      -name "git-*-macos-$(cc_arch).pkg" -type f | head -1)
                     if [ -z "$pkg" ]; then
-                      echo "No git-*-$(cc_arch).pkg found in _final" >&2
+                      echo "No git-*-macos-$(cc_arch).pkg found in _final" >&2
                       exit 1
                     fi
                     echo "Installing $pkg"
