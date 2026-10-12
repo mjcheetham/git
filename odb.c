@@ -852,7 +852,8 @@ retry:
 			if (ret != ODB_READ_NOT_FOUND)
 				corrupt = true;
 			if (gvfs_virtualize_objects(odb->repo) && !tried_hook &&
-			    !(flags & OBJECT_INFO_SKIP_FETCH_OBJECT)) {
+			    (!(flags & OBJECT_INFO_SKIP_FETCH_OBJECT) ||
+			     (flags & OBJECT_INFO_RECHECK_PACKED))) {
 				// TODO Assert or at least trace2 if gvfs-helper
 				// TODO was tried and failed and then read-object-hook
 				// TODO is successful at getting this object.
@@ -1096,6 +1097,8 @@ int odb_has_object(struct object_database *odb, const struct object_id *oid,
 		return 0;
 	if (!(flags & ODB_HAS_OBJECT_RECHECK_PACKED))
 		object_info_flags |= OBJECT_INFO_QUICK;
+	else
+		object_info_flags |= OBJECT_INFO_RECHECK_PACKED;
 	if (!(flags & ODB_HAS_OBJECT_FETCH_PROMISOR))
 		object_info_flags |= OBJECT_INFO_SKIP_FETCH_OBJECT;
 
