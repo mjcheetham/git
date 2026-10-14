@@ -101,20 +101,22 @@ test_expect_success PERL_TEST_HELPERS 'setup fetch with a virtualized ref tip' '
 '
 
 # The ref tip is not in the client object store and is newer than any
-# pack a GVFS cache server has published. check_exist_and_connected()
-# calls odb_has_object(ODB_HAS_OBJECT_RECHECK_PACKED), which sets
-# OBJECT_INFO_SKIP_FETCH_OBJECT. The read-object hook must still run and
-# supply the tip, so that git skips the fetch-pack exchange.
+# pack a GVFS cache server has published. The fetch existence check must
+# allow object acquisition in a virtualized repository so that the
+# read-object hook supplies the tip without a fetch-pack exchange.
 test_expect_success PERL_TEST_HELPERS 'read-object hook runs for missing tip' '
 	test_path_is_missing fetch-client/.git/read-object-hook.log &&
 
 	READ_OBJECT_DIR="$server_odb" \
+	GIT_TRACE2_EVENT="$PWD/fetch.trace" \
 		git -C fetch-client fetch "$(pwd)/fetch-server" \
 		+refs/heads/main:refs/remotes/server/main &&
 
 	echo "$server_tip" >expect &&
 	git -C fetch-client rev-parse refs/remotes/server/main >actual &&
 	test_cmp expect actual &&
+
+	test_grep ! "\"label\":\"fetch_refs\"" fetch.trace &&
 
 	find fetch-client/.git/objects/pack -name "*.pack" >packs &&
 	test_must_be_empty packs &&
