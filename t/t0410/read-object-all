@@ -34,7 +34,8 @@ sub packet_bin_read {
 		my $content_size = $pkt_size - 4;
 		$bytes_read = read STDIN, $buffer, $content_size;
 		if ( $bytes_read != $content_size ) {
-			die "invalid packet ($content_size bytes expected; $bytes_read bytes read)";
+			die "invalid packet ($content_size bytes expected; " .
+				"$bytes_read bytes read)";
 		}
 		return ( 0, $buffer );
 	}
@@ -67,9 +68,10 @@ sub packet_flush {
 	STDOUT->flush();
 }
 
-( packet_txt_read() eq ( 0, "git-read-object-client" ) ) || die "bad initialize";
-( packet_txt_read() eq ( 0, "version=1" ) )				 || die "bad version";
-( packet_bin_read() eq ( 1, "" ) )                       || die "bad version end";
+( packet_txt_read() eq ( 0, "git-read-object-client" ) ) ||
+	die "bad initialize";
+( packet_txt_read() eq ( 0, "version=1" ) ) || die "bad version";
+( packet_bin_read() eq ( 1, "" ) ) || die "bad version end";
 
 packet_txt_write("git-read-object-server");
 packet_txt_write("version=1");
@@ -96,9 +98,10 @@ while (1) {
 			next;
 		}
 
-		system ('git --git-dir="' . $DIR . '" cat-file ' . $type . ' ' . $sha1 .
-			' | git -c core.virtualizeobjects=false hash-object -t ' . $type .
-			' -w --stdin >/dev/null 2>&1');
+		system ('git --git-dir="' . $DIR . '" cat-file ' .
+			$type . ' ' . $sha1 .
+			' | git -c core.virtualizeobjects=false hash-object ' .
+			'-t ' . $type . ' -w --stdin >/dev/null 2>&1');
 		packet_txt_write(($?) ? "status=error" : "status=success");
 		packet_flush();
 
