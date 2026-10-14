@@ -458,16 +458,6 @@ enum object_info_flags {
 	OBJECT_INFO_SKIP_PACKED = (1 << 6),
 
 	/*
-	 * The caller is rechecking object existence (for example via
-	 * `odb_has_object()` with `ODB_HAS_OBJECT_RECHECK_PACKED`), not
-	 * enumerating missing objects. In a virtualized object store this
-	 * allows the read-object hook to materialize the object even when
-	 * `OBJECT_INFO_SKIP_FETCH_OBJECT` is set, because the hook is the
-	 * local virtualization layer rather than a promisor-remote fetch.
-	 */
-	OBJECT_INFO_RECHECK_PACKED = (1 << 7),
-
-	/*
 	 * This is meant for bulk prefetching of missing blobs in a partial
 	 * clone. Implies OBJECT_INFO_SKIP_FETCH_OBJECT and OBJECT_INFO_QUICK.
 	 */
