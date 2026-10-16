@@ -302,6 +302,7 @@ extends:
                 - task: Bash@3
                   displayName: 'Build mingw-w64-git package'
                   env:
+                    WITH_MINGW64_GCM_WRAPPER: '1'
                     # Git v2.55 still builds without Rust.
                     NO_RUST: ForNow
                     # The mingw-w64-git build is heavy on parallel work
