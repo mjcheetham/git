@@ -92,6 +92,8 @@ asset_json=$(jq -n \
 		      ([$matches[].name] | join(", ")))
 	  else $matches[0] end')
 
+asset_name=$(jq -n -r --argjson a "$asset_json" '$a.name')
+asset_url=$(jq -n -r --argjson a "$asset_json" '$a.browser_download_url')
 digest=$(jq -n -r --argjson a "$asset_json" '$a.digest // ""')
 case "$digest" in
 sha256:*) sha256=${digest#sha256:} ;;
@@ -107,7 +109,7 @@ esac
 test ${#sha256} -eq 64 ||
 	die "asset digest is not 64 chars long: $sha256"
 
-echo "==> Asset:     $(jq -n -r --argjson a "$asset_json" '$a.name')"
+echo "==> Asset:     $asset_name"
 echo "==> SHA-256:   $sha256"
 
 workdir=$(mktemp -d)
@@ -130,6 +132,8 @@ q='(['\''"])[^'\''"]+\2'
 sed -E \
 	-e "s/^([[:space:]]*)version +$q/\\1version \\2$version\\2/" \
 	-e "s/^([[:space:]]*)sha256 +$q/\\1sha256 \\2$sha256\\2/" \
+	-e "s|^([[:space:]]*)url +$q|\\1url \\2$asset_url\\2|" \
+	-e "s|^([[:space:]]*)pkg +$q|\\1pkg \\2$asset_name\\2|" \
 	<"$f" >"$f.new" &&
 mv -f "$f.new" "$f"
 
